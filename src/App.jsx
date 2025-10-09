@@ -37,14 +37,14 @@ export default function GlossaryApp() {
 
   const getFilteredTerms = () => { let filtered = s.terms; if (s.selectedTag !== 'all') filtered = filtered.filter(term => term.tags?.includes(s.selectedTag)); if (s.search) filtered = filtered.filter(term => term.term.toLowerCase().includes(s.search.toLowerCase()) || term.definition.toLowerCase().includes(s.search.toLowerCase()) || term.mandarin?.toLowerCase().includes(s.search.toLowerCase()) || term.tags?.some(tag => tag.toLowerCase().includes(s.search.toLowerCase()))); return filtered; };
 
-  if (s.loading) return <div className="w-full max-w-md mx-auto min-h-screen bg-background flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div><p className="text-muted-foreground">Loading glossary...</p></div></div>;
-  if (s.error) return <div className="w-full max-w-md mx-auto min-h-screen bg-background flex items-center justify-center p-4"><div className="text-center"><div className="text-destructive mb-4">⚠️</div><p className="text-destructive mb-4">{s.error}</p><Button onClick={() => window.location.reload()}>Try Again</Button></div></div>;
+  if (s.loading) return <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-background flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div><p className="text-muted-foreground">Loading glossary...</p></div></div>;
+  if (s.error) return <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-background flex items-center justify-center p-4"><div className="text-center"><div className="text-destructive mb-4">⚠️</div><p className="text-destructive mb-4">{s.error}</p><Button onClick={() => window.location.reload()}>Try Again</Button></div></div>;
 
-  return <div className="w-full max-w-md mx-auto min-h-screen bg-background flex flex-col">
+  return <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-background flex flex-col">
     <Toaster />
     {s.view === 'list' ? <div className="flex flex-col h-screen w-full">
-        <div className="text-center mb-6"><h1 className="text-5xl font-bold text-primary">fingloss</h1></div>
-        <div className="flex gap-2 items-center">
+        <div className="text-center mb-6 px-4 pt-8"><h1 className="text-5xl font-bold text-primary animate-in fade-in slide-in-from-bottom-4 duration-1000">fingloss</h1></div>
+        <div className="flex gap-2 items-center px-4">
           <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search" value={s.search} onChange={(e) => update({ search: e.target.value })} className="w-full pl-10 h-10 text-sm" onKeyDown={(e) => e.key === 'Enter' && s.search && !s.terms.length && h.add(s.search)} /></div>
           {s.tags.length > 0 && <div className="relative tag-dropdown">
             <Button variant="outline" size="sm" onClick={() => update({ tagDropdownOpen: !s.tagDropdownOpen })} className="whitespace-nowrap">
@@ -61,7 +61,15 @@ export default function GlossaryApp() {
         <div className="flex-1 relative">
           <ScrollArea className="h-full">
             <div className="divide-y divide-border">
-              {getFilteredTerms().map(term => <div key={term.id} className="p-4 hover:bg-accent active:bg-accent/80 cursor-pointer transition-colors" onClick={() => { update({ selected: term, view: 'detail' }); }}><div className="flex items-center gap-2 mb-1"><div className="font-medium text-base text-foreground break-words">{term.term || "Untitled"}</div>{term.ipa && <div className="text-sm text-muted-foreground font-mono">{term.ipa}</div>}</div>{term.mandarin && <div className="text-sm text-muted-foreground font-medium mb-1">{term.mandarin}</div>}<div className="text-sm text-muted-foreground line-clamp-2 break-words mb-2">{term.definition || "Tap to add definition"}</div>{term.tags && term.tags.length > 0 && <div className="flex flex-wrap gap-1">{term.tags.map(tag => <span key={tag} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-primary/10 text-primary"><Tag className="h-2 w-2 mr-1" />{tag}</span>)}</div>}</div>)}
+              {getFilteredTerms().map(term => <div key={term.id} className="p-4 hover:bg-accent active:bg-accent/80 cursor-pointer transition-colors" onClick={() => { update({ selected: term, view: 'detail' }); }}>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+                  <div className="font-medium text-base text-foreground break-words">{term.term || "Untitled"}</div>
+                  {term.ipa && <div className="text-sm text-muted-foreground font-mono">{term.ipa}</div>}
+                  {term.mandarin && <div className="text-sm text-muted-foreground font-medium w-full md:w-auto">{term.mandarin}</div>}
+                </div>
+                <div className="text-sm text-muted-foreground line-clamp-2 break-words mb-2">{term.definition || "Tap to add definition"}</div>
+                {term.tags && term.tags.length > 0 && <div className="flex flex-wrap gap-1">{term.tags.map(tag => <span key={tag} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-primary/10 text-primary"><Tag className="h-2 w-2 mr-1" />{tag}</span>)}</div>}
+              </div>)}
               {s.terms.length === 0 && <div className="p-8 text-center text-muted-foreground">{s.search ? 'No matches - press Enter to create' : 'No terms yet'}</div>}
             </div>
           </ScrollArea>
