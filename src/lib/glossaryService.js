@@ -31,14 +31,44 @@ export const glossaryService = {
   // Get all terms
   async getAllTerms() {
     try {
-      const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Try query with orderBy first
+      try {
+        const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (orderByError) {
+        // If orderBy fails (likely due to missing index), fall back to query without orderBy
+        if (orderByError.code === 'failed-precondition' || orderByError.message?.includes('index')) {
+          console.warn('Index not found, falling back to client-side sorting:', orderByError);
+          const q = query(collection(db, COLLECTION_NAME));
+          const querySnapshot = await getDocs(q);
+          const terms = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          // Sort client-side by createdAt if available, otherwise by id
+          return terms.sort((a, b) => {
+            if (a.createdAt && b.createdAt) {
+              return b.createdAt.toMillis() - a.createdAt.toMillis();
+            }
+            return b.id.localeCompare(a.id);
+          });
+        }
+        throw orderByError;
+      }
     } catch (error) {
       console.error('Error getting terms:', error);
+      // Provide more specific error messages
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      } else if (error.code === 'unavailable') {
+        throw new Error('Firestore is unavailable. Please check your internet connection and Firebase configuration.');
+      } else if (error.message?.includes('Firebase')) {
+        throw new Error(`Firebase error: ${error.message}`);
+      }
       throw error;
     }
   },
@@ -46,18 +76,43 @@ export const glossaryService = {
   // Get terms by tag
   async getTermsByTag(tag) {
     try {
-      const q = query(
-        collection(db, COLLECTION_NAME), 
-        where('tags', 'array-contains', tag),
-        orderBy('createdAt', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      try {
+        const q = query(
+          collection(db, COLLECTION_NAME), 
+          where('tags', 'array-contains', tag),
+          orderBy('createdAt', 'desc')
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (orderByError) {
+        // Fall back to query without orderBy if index is missing
+        if (orderByError.code === 'failed-precondition' || orderByError.message?.includes('index')) {
+          const q = query(
+            collection(db, COLLECTION_NAME), 
+            where('tags', 'array-contains', tag)
+          );
+          const querySnapshot = await getDocs(q);
+          const terms = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          return terms.sort((a, b) => {
+            if (a.createdAt && b.createdAt) {
+              return b.createdAt.toMillis() - a.createdAt.toMillis();
+            }
+            return b.id.localeCompare(a.id);
+          });
+        }
+        throw orderByError;
+      }
     } catch (error) {
       console.error('Error getting terms by tag:', error);
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
       throw error;
     }
   },
@@ -65,19 +120,15 @@ export const glossaryService = {
   // Search terms
   async searchTerms(searchTerm) {
     try {
-      const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const allTerms = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Use getAllTerms which handles orderBy errors gracefully
+      const allTerms = await this.getAllTerms();
       
       // Client-side filtering for search (Firestore doesn't support full-text search)
       return allTerms.filter(term => 
-        term.term.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        term.definition.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        term.mandarin.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        term.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+        term.term?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        term.definition?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        term.mandarin?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        term.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     } catch (error) {
       console.error('Error searching terms:', error);
@@ -97,6 +148,9 @@ export const glossaryService = {
       return docRef.id;
     } catch (error) {
       console.error('Error adding term:', error);
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
       throw error;
     }
   },
@@ -111,6 +165,11 @@ export const glossaryService = {
       });
     } catch (error) {
       console.error('Error updating term:', error);
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      } else if (error.code === 'not-found') {
+        throw new Error('Term not found. It may have been deleted.');
+      }
       throw error;
     }
   },
@@ -121,6 +180,9 @@ export const glossaryService = {
       await deleteDoc(doc(db, COLLECTION_NAME, termId));
     } catch (error) {
       console.error('Error deleting term:', error);
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
       throw error;
     }
   },
@@ -137,6 +199,9 @@ export const glossaryService = {
       return [...new Set(allTags)].sort();
     } catch (error) {
       console.error('Error getting tags:', error);
+      if (error.code === 'permission-denied') {
+        throw new Error('Permission denied. Please check Firestore security rules.');
+      }
       throw error;
     }
   }

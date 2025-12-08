@@ -11,10 +11,25 @@ const firebaseConfig = {
   appId: "1:299026518489:web:d6f8a4cefb91cb55bd49c8"
 };
 
+// Validate Firebase configuration
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error('Firebase configuration is incomplete. Please check your Firebase config.');
+}
+
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+let app;
+let db;
 
-// Initialize Firestore
-export const db = getFirestore(app);
+try {
+  app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  
+  // Log successful initialization
+  console.log('Firebase initialized successfully');
+} catch (error) {
+  console.error('Error initializing Firebase:', error);
+  throw new Error(`Firebase initialization failed: ${error.message}`);
+}
 
+export { db };
 export default app;
