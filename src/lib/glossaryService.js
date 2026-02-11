@@ -20,8 +20,8 @@ const COLLECTION_NAME = 'terms';
 //   term: string,
 //   definition: string,
 //   ipa: string (IPA pronunciation),
-//   mandarin: string (Mandarin translation),
 //   tags: string[] (custom tags),
+//   audioUrl: string (URL to cached audio in Firebase Storage),
 //   createdAt: timestamp,
 //   updatedAt: timestamp,
 //   userId: string (for future user authentication)
@@ -127,7 +127,6 @@ export const glossaryService = {
       return allTerms.filter(term => 
         term.term?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         term.definition?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        term.mandarin?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         term.tags?.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     } catch (error) {
