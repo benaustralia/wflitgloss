@@ -10,9 +10,12 @@
     "cssVariables": true,
     "prefix": ""
   },
+  "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components",
     "utils": "@/lib/utils"
+  },
+  "registries": {
+    "@pacekit": "https://ui.pacekit.dev/r/{name}.json"
   }
 }
-
