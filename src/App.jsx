@@ -4,33 +4,83 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Plus, Search, ArrowLeft, Tag, X, ChevronDown, Volume2, Package, Upload, Download, Trash2, Copy } from 'lucide-react';
+import { Plus, Search, ArrowLeft, Tag, X, ChevronDown, Volume2, Package, Upload, Download, Copy } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { glossaryService } from '@/lib/glossaryService';
 
 const debounce = (func, wait) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; };
-const APP_VERSION = "Version 9";
+const APP_VERSION = "Version 10";
 
 export default function GlossaryApp() {
-  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', tags: [], selectedTag: 'all', loading: true, error: null, localTerm: null, newTag: '', importJson: '', importStatus: '', tagDropdownOpen: false, isGeneratingAudio: false });
+  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', tags: [], selectedTag: 'all', loading: true, error: null, localTerm: null, newTag: '', importJson: '', importStatus: '', tagDropdownOpen: false, isGeneratingAudio: false, flashId: null });
   const update = (u) => setS(p => typeof u === 'function' ? u(p) : { ...p, ...u }) ;
   useEffect(() => { (async () => { try { update({ loading: true, error: null }); const allTerms = await glossaryService.getAllTerms(); const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); update({ terms: allTerms, tags: allTags, error: null, loading: false }); } catch (err) { const errorMessage = err.message || 'Failed to load data. Please check Firebase configuration.'; console.error('Failed to load glossary data:', err); update({ error: errorMessage, loading: false }); } })(); }, []);
   useEffect(() => { update({ localTerm: s.selected }); }, [s.selected]);
   useEffect(() => { const handleClickOutside = (e) => { if (s.tagDropdownOpen && !e.target.closest('.tag-dropdown')) { update({ tagDropdownOpen: false }); } }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, [s.tagDropdownOpen]);
   useEffect(() => { const handleEscape = async (e) => { if (e.key === 'Escape') { e.preventDefault(); if (document.activeElement && document.activeElement.tagName !== 'BODY') { document.activeElement.blur(); } if (s.view === 'detail') { const term = s.localTerm || s.selected; const shouldDelete = term && term.id && (!term.term || term.term.trim() === '') && (!term.definition || term.definition.trim() === '') && (!term.ipa || term.ipa.trim() === '') && (!term.tags || term.tags.length === 0); if (shouldDelete && term.id) { update((prevState) => ({ ...prevState, terms: prevState.terms.filter(t => t.id !== term.id), view: 'list', selected: null })); glossaryService.deleteTerm(term.id).catch(err => console.error('Failed to delete blank term:', err)); } else { update({ view: 'list', selected: null }); } } else if (s.view === 'import') { update({ view: 'list' }); } } }; document.addEventListener('keydown', handleEscape, true); return () => document.removeEventListener('keydown', handleEscape, true); }, [s.view, s.localTerm, s.selected]);
+  useEffect(() => {
+    if (s.flashId) {
+      const timer = setTimeout(() => update({ flashId: null }), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [s.flashId]);
+  useEffect(() => {
+    if (s.flashId && s.view === 'list') {
+      // Small delay to ensure rendering is complete
+      setTimeout(() => {
+        const element = document.getElementById(`term-${s.flashId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [s.flashId, s.view]);
 
-  const debouncedSave = useCallback(debounce(async (field, value) => { if (!s.selected) return; try { await glossaryService.updateTerm(s.selected.id, { [field]: value }); update({ terms: s.terms.map(t => t.id === s.selected.id ? {...t, [field]: value} : t), selected: {...s.selected, [field]: value} }); if (field === 'tags') { const allTags = [...new Set(s.terms.flatMap(term => term.tags || []))].sort(); update({ tags: allTags }); } } catch (err) { update({ error: 'Failed to save. Please try again.' }); } }, 500), [s.selected, s.terms]);
+  // const debouncedSave = useCallback(debounce(async (field, value) => { if (!s.selected) return; try { await glossaryService.updateTerm(s.selected.id, { [field]: value }); update({ terms: s.terms.map(t => t.id === s.selected.id ? {...t, [field]: value} : t), selected: {...s.selected, [field]: value} }); if (field === 'tags') { const allTags = [...new Set(s.terms.flatMap(term => term.tags || []))].sort(); update({ tags: allTags }); } } catch (err) { update({ error: 'Failed to save. Please try again.' }); } }, 500), [s.selected, s.terms]);
 
   const h = {
-    inputChange: (field, value) => { update({ localTerm: { ...s.localTerm, [field]: value } }); debouncedSave(field, value); },
+    inputChange: (field, value) => { update({ localTerm: { ...s.localTerm, [field]: value } }); },
+    save: async () => {
+      if (!s.selected) return;
+      update({ loading: true });
+      try {
+        await glossaryService.updateTerm(s.selected.id, s.localTerm);
+        update({ 
+          terms: s.terms.map(t => t.id === s.selected.id ? { ...t, ...s.localTerm } : t), 
+          selected: null,
+          view: 'list',
+          loading: false,
+          flashId: s.selected.id
+        });
+        toast.success('Saved successfully');
+        if (s.localTerm.tags) {
+          const allTags = [...new Set([...s.terms.map(t => t.id === s.selected.id ? { ...t, ...s.localTerm } : t).flatMap(term => term.tags || [])])].sort();
+          update({ tags: allTags });
+        }
+      } catch (err) {
+        update({ error: 'Failed to save. Please try again.', loading: false });
+        toast.error('Failed to save');
+      }
+    },
     add: async (searchTerm = '') => { const tempId = Date.now().toString(); const termData = { term: searchTerm, definition: "", ipa: "", tags: [] }; const newTerm = { id: tempId, ...termData }; update({ terms: [newTerm, ...s.terms], selected: newTerm, view: 'detail', search: searchTerm ? '' : s.search }); try { const termId = await glossaryService.addTerm(termData); update({ terms: s.terms.map(t => t.id === tempId ? { ...t, id: termId } : t), selected: { ...newTerm, id: termId } }); } catch (err) { update({ error: 'Failed to add term. Please try again.', terms: s.terms.filter(t => t.id !== tempId), view: 'list', selected: null }); } },
     delete: async (termId) => { try { await glossaryService.deleteTerm(termId); const newTerms = s.terms.filter(t => t.id !== termId); const allTags = [...new Set(newTerms.flatMap(term => term.tags || []))].sort(); update({ terms: newTerms, tags: allTags }); } catch (err) { update({ error: 'Failed to delete term. Please try again.' }); } },
     goBack: async () => { const term = s.localTerm || s.selected; const shouldDelete = term && term.id && (!term.term || term.term.trim() === '') && (!term.definition || term.definition.trim() === '') && (!term.ipa || term.ipa.trim() === '') && (!term.tags || term.tags.length === 0); if (shouldDelete) { const newTerms = s.terms.filter(t => t.id !== term.id); update({ terms: newTerms, view: 'list', selected: null }); glossaryService.deleteTerm(term.id).catch(err => console.error('Failed to delete blank term:', err)); } else { update({ view: 'list', selected: null }); } },
-    addTag: () => { if (s.newTag.trim() && !s.localTerm.tags?.includes(s.newTag.trim())) { const updatedTags = [...(s.localTerm.tags || []), s.newTag.trim()]; update({ localTerm: { ...s.localTerm, tags: updatedTags }, newTag: '' }); debouncedSave('tags', updatedTags); } },
-    removeTag: (tagToRemove) => { const updatedTags = s.localTerm.tags?.filter(tag => tag !== tagToRemove) || []; update({ localTerm: { ...s.localTerm, tags: updatedTags } }); debouncedSave('tags', updatedTags); },
+    addTag: () => { if (s.newTag.trim() && !s.localTerm.tags?.includes(s.newTag.trim())) { const updatedTags = [...(s.localTerm.tags || []), s.newTag.trim()]; update({ localTerm: { ...s.localTerm, tags: updatedTags }, newTag: '' }); } },
+    removeTag: (tagToRemove) => { const updatedTags = s.localTerm.tags?.filter(tag => tag !== tagToRemove) || []; update({ localTerm: { ...s.localTerm, tags: updatedTags } }); },
     speak: async (termOrText = null) => { 
       let text = '';
       let termObj = null;
@@ -53,14 +103,12 @@ export default function GlossaryApp() {
 
       // 1. Check if we have a cached URL in the term object
       if (termObj && termObj.audioUrl) {
-        // console.log('Playing from cache:', termObj.audioUrl);
         const audio = new Audio(termObj.audioUrl);
         audio.play().catch(e => console.error('Playback error:', e));
         return;
       }
 
       const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY; 
-      // console.log('ElevenLabs API Key:', apiKey ? 'Found' : 'Missing'); 
       if (!apiKey) { 
         console.error('No ElevenLabs API key found. Set VITE_ELEVENLABS_API_KEY in .env.local'); 
         return; 
@@ -69,7 +117,6 @@ export default function GlossaryApp() {
       update({ isGeneratingAudio: true }); 
       
       try { 
-        // console.log('Making ElevenLabs request for:', text); 
         const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/IKne3meq5aSn9XLyUdCD', { 
           method: 'POST', 
           headers: { 
@@ -84,8 +131,6 @@ export default function GlossaryApp() {
           }) 
         }); 
         
-        // console.log('ElevenLabs response status:', response.status); 
-        
         if (response.ok) { 
           const audioBlob = await response.blob(); 
           
@@ -94,7 +139,6 @@ export default function GlossaryApp() {
           const audio = new Audio(audioUrl); 
           
           audio.onloadeddata = () => { 
-            // console.log('Audio playing...'); 
             audio.play(); 
             update({ isGeneratingAudio: false }); 
           }; 
@@ -122,7 +166,6 @@ export default function GlossaryApp() {
                 selected: prev.selected && prev.selected.id === termObj.id ? { ...prev.selected, audioUrl: downloadUrl } : prev.selected
               }));
               
-              // console.log('Audio cached to Firebase Storage:', downloadUrl);
             } catch (uploadError) {
               console.error('Failed to cache audio:', uploadError);
             }
@@ -141,7 +184,12 @@ export default function GlossaryApp() {
     cleanupBlankEntries: async () => { try { update({ importStatus: 'Cleaning up blank entries...' }); const blankTerms = s.terms.filter(term => !term.term || term.term.trim() === '' || term.term === 'Untitled'); let deleted = 0; for (const term of blankTerms) { await glossaryService.deleteTerm(term.id); deleted++; } update({ importStatus: `✅ Cleaned up ${deleted} blank entries!` }); const allTerms = await glossaryService.getAllTerms(); const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); update({ terms: allTerms, tags: allTags }); } catch (err) { update({ importStatus: `❌ Cleanup failed: ${err.message}` }); } }
   };
 
-  const getFilteredTerms = () => { let filtered = s.terms || []; if (s.selectedTag !== 'all') filtered = filtered.filter(term => term.tags?.includes(s.selectedTag)); if (s.search) filtered = filtered.filter(term => term.term.toLowerCase().includes(s.search.toLowerCase()) || term.definition.toLowerCase().includes(s.search.toLowerCase()) || term.tags?.some(tag => tag.toLowerCase().includes(s.search.toLowerCase()))); return filtered; };
+  const getFilteredTerms = () => { 
+    let filtered = s.terms || []; 
+    if (s.selectedTag !== 'all') filtered = filtered.filter(term => term.tags?.includes(s.selectedTag)); 
+    if (s.search) filtered = filtered.filter(term => term.term.toLowerCase().includes(s.search.toLowerCase()) || term.definition.toLowerCase().includes(s.search.toLowerCase()) || term.tags?.some(tag => tag.toLowerCase().includes(s.search.toLowerCase()))); 
+    return filtered.sort((a, b) => (a.term || "").localeCompare(b.term || "", undefined, { sensitivity: 'base' })); 
+  };
 
   if (s.loading) return <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-background flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div><p className="text-muted-foreground">Loading glossary...</p></div></div>;
   if (s.error) return <div className="w-full max-w-md md:max-w-2xl lg:max-w-4xl mx-auto min-h-screen bg-background flex items-center justify-center p-4"><div className="text-center"><div className="text-destructive mb-4">⚠️</div><p className="text-destructive mb-4">{s.error}</p><Button onClick={() => window.location.reload()}>Try Again</Button></div></div>;
@@ -170,7 +218,7 @@ export default function GlossaryApp() {
         <div className="flex-1 relative">
           <ScrollArea className="h-full">
             <div className="divide-y divide-border">
-              {getFilteredTerms().map(term => <div key={term.id} className="p-4 hover:bg-accent active:bg-accent/80 cursor-pointer transition-colors" onClick={() => { update({ selected: term, view: 'detail' }); }}>
+              {getFilteredTerms().map(term => <div key={term.id} id={`term-${term.id}`} className={`p-4 hover:bg-accent active:bg-accent/80 cursor-pointer transition-all duration-1000 ${s.flashId === term.id ? 'bg-primary/20' : ''}`} onClick={() => { update({ selected: term, view: 'detail' }); }}>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                   {term.term && <div onClick={(e) => e.stopPropagation()}><Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); h.speak(term.term); }} disabled={s.isGeneratingAudio} className="h-6 w-6 -ml-1">
                     <Volume2 className="h-3.5 w-3.5" />
@@ -231,10 +279,12 @@ export default function GlossaryApp() {
         <p className="text-xs text-muted-foreground">{APP_VERSION}</p>
       </div>
     </div> : <div className="flex flex-col h-screen w-full">
-      <div className="flex-none p-4 border-b border-border bg-background flex justify-between items-center">
-        <Button variant="ghost" onClick={h.goBack}><ArrowLeft />Back</Button>
-        <span className="text-lg font-medium truncate max-w-xs">{s.localTerm?.term || 'New Term'}</span>
-        <Button variant="destructive" size="sm" onClick={() => { if (confirm('Delete this term?')) { h.delete(s.selected.id); update({ view: 'list', selected: null }); } }}>Delete</Button>
+      <div className="flex-none p-4 border-b border-border bg-background flex items-center">
+        <div className="flex-1">
+          <Button variant="ghost" onClick={h.goBack}><ArrowLeft />Back</Button>
+        </div>
+        <span className="text-lg font-medium truncate max-w-xs text-center">{s.localTerm?.term || 'New Term'}</span>
+        <div className="flex-1"></div>
       </div>
       <ScrollArea className="flex-1"><div className="p-4 space-y-4">
         <div className="space-y-2">
@@ -252,6 +302,29 @@ export default function GlossaryApp() {
         <Textarea placeholder="Definition" value={s.localTerm?.definition || ''} onChange={(e) => h.inputChange('definition', e.target.value)} className="w-full min-h-40 text-base resize-none" rows={10} />
         <div className="space-y-3">{s.localTerm?.tags && s.localTerm.tags.length > 0 && <div className="flex flex-wrap gap-2">{s.localTerm.tags.map(tag => <span key={tag} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary/10 text-primary"><Tag className="h-3 w-3 mr-1" />{tag}<button onClick={() => h.removeTag(tag)} className="ml-2 hover:text-primary/80"><X className="h-3 w-3" /></button></span>)}</div>}<div className="flex gap-2"><Input placeholder="Tag" value={s.newTag || ''} onChange={(e) => update({ newTag: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && h.addTag()} className="flex-1 text-sm" /><Button size="sm" variant="outline" onClick={h.addTag} disabled={!s.newTag || !s.newTag.trim()}><Tag />Add</Button></div></div>
       </div></ScrollArea>
+      <div className="flex-none p-4 border-t border-border bg-background">
+        <div className="flex justify-end gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive">Delete</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete the term
+                  "{s.localTerm?.term || 'Untitled'}".
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { h.delete(s.selected.id); update({ view: 'list', selected: null }); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button onClick={h.save} disabled={s.loading}>Save</Button>
+        </div>
+      </div>
       <div className="p-2 text-center">
         <p className="text-xs text-muted-foreground">{APP_VERSION}</p>
       </div>
