@@ -23,7 +23,7 @@ import { storage } from '@/lib/firebase';
 import { glossaryService } from '@/lib/glossaryService';
 
 const debounce = (func, wait) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; };
-const APP_VERSION = "Version 10";
+const APP_VERSION = "Version 11";
 
 export default function GlossaryApp() {
   const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', tags: [], selectedTag: 'all', loading: true, error: null, localTerm: null, newTag: '', importJson: '', importStatus: '', tagDropdownOpen: false, isGeneratingAudio: false, fetchingIPA: false, flashId: null });
@@ -309,7 +309,7 @@ export default function GlossaryApp() {
         return { ...prev, localTerm: { ...prev.localTerm, tags: updatedTags } };
       });
     },
-    speak: async (termOrText = null) => { 
+    speak: async (termOrText = null) => {
       let text = '';
       let termObj = null;
 
@@ -330,7 +330,7 @@ export default function GlossaryApp() {
         text = termObj?.term;
       }
 
-      if (!text || currentState.isGeneratingAudio) return; 
+      if (!text || currentState.isGeneratingAudio) return;
 
       // 1. Check if we have a cached URL in the term object
       if (termObj && termObj.audioUrl) {
@@ -339,45 +339,42 @@ export default function GlossaryApp() {
         return;
       }
 
-      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY; 
-      if (!apiKey) { 
-        console.error('No ElevenLabs API key found. Set VITE_ELEVENLABS_API_KEY in .env.local'); 
-        return; 
-      } 
-      
-      update({ isGeneratingAudio: true }); 
-      
-      try { 
-        const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/IKne3meq5aSn9XLyUdCD', { 
-          method: 'POST', 
-          headers: { 
-            'Accept': 'audio/mpeg', 
-            'Content-Type': 'application/json', 
-            'xi-api-key': apiKey 
-          }, 
-          body: JSON.stringify({ 
-            text: text, 
-            model_id: 'eleven_turbo_v2_5', 
-            voice_settings: { stability: 0.3, similarity_boost: 0.3, style: 0.2, use_speaker_boost: true } 
-          }) 
-        }); 
-        
-        if (response.ok) { 
-          const audioBlob = await response.blob(); 
-          
+      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
+      if (!apiKey) {
+        console.error('No ElevenLabs API key found. Set VITE_ELEVENLABS_API_KEY in .env.local');
+        return;
+      }
+
+      update({ isGeneratingAudio: true });
+
+      try {
+        const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/IKne3meq5aSn9XLyUdCD', {
+          method: 'POST',
+          headers: {
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+            'xi-api-key': apiKey
+          },
+          body: JSON.stringify({
+            text: text,
+            model_id: 'eleven_turbo_v2_5',
+            voice_settings: { stability: 0.3, similarity_boost: 0.3, style: 0.2, use_speaker_boost: true }
+          })
+        });
+
+        if (response.ok) {
+          const audioBlob = await response.blob();
+
           // Play immediately
           const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl); 
-          
-          audio.onloadeddata = () => { 
-            audio.play(); 
-            update({ isGeneratingAudio: false }); 
-          }; 
-          
-          audio.onerror = (e) => { 
-            console.error('Audio playback error:', e); 
-            update({ isGeneratingAudio: false }); 
-          };
+          const audio = new Audio(audioUrl);
+
+          audio.play()
+            .then(() => update({ isGeneratingAudio: false }))
+            .catch(e => {
+              console.error('Audio playback error:', e);
+              update({ isGeneratingAudio: false });
+            });
 
           // 2. Upload to Firebase Storage if we have a valid term ID
           if (termObj && termObj.id && !termObj.id.match(/^\d+$/)) { // Check if ID is not temp timestamp
@@ -385,10 +382,10 @@ export default function GlossaryApp() {
               const storageRef = ref(storage, `audio/${termObj.id}.mp3`);
               await uploadBytes(storageRef, audioBlob);
               const downloadUrl = await getDownloadURL(storageRef);
-              
+
               // 3. Update Firestore with new URL
               await glossaryService.updateTerm(termObj.id, { audioUrl: downloadUrl });
-              
+
               // Update local state
               update(prev => ({
                 ...prev,
@@ -396,19 +393,19 @@ export default function GlossaryApp() {
                 localTerm: prev.localTerm && prev.localTerm.id === termObj.id ? { ...prev.localTerm, audioUrl: downloadUrl } : prev.localTerm,
                 selected: prev.selected && prev.selected.id === termObj.id ? { ...prev.selected, audioUrl: downloadUrl } : prev.selected
               }));
-              
+
             } catch (uploadError) {
               console.error('Failed to cache audio:', uploadError);
             }
           }
-        } else { 
-          console.error('ElevenLabs API error:', response.status, response.statusText); 
-          update({ isGeneratingAudio: false }); 
-        } 
-      } catch (error) { 
-        console.error('ElevenLabs error:', error); 
-        update({ isGeneratingAudio: false }); 
-      } 
+        } else {
+          console.error('ElevenLabs API error:', response.status, response.statusText);
+          update({ isGeneratingAudio: false });
+        }
+      } catch (error) {
+        console.error('ElevenLabs error:', error);
+        update({ isGeneratingAudio: false });
+      }
     },
     exportTerms: () => {
       const currentState = sRef.current;
