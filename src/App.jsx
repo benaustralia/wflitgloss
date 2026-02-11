@@ -18,12 +18,12 @@ import {
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { Plus, Search, ArrowLeft, Tag, X, ChevronDown, Volume2, Package, Upload, Download, Copy, Sparkles } from 'lucide-react';
+import { Footer } from '@/components/footer';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { glossaryService } from '@/lib/glossaryService';
 
 const debounce = (func, wait) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; };
-const APP_VERSION = "Version 11";
 
 export default function GlossaryApp() {
   const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', tags: [], selectedTag: 'all', loading: true, error: null, localTerm: null, newTag: '', importJson: '', importStatus: '', tagDropdownOpen: false, isGeneratingAudio: false, fetchingIPA: false, flashId: null });
@@ -592,9 +592,7 @@ export default function GlossaryApp() {
           </ScrollArea>
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none"></div>
         </div>
-        <div className="p-2 text-center">
-          <p className="text-xs text-muted-foreground">{APP_VERSION}</p>
-        </div>
+        <Footer />
       </div> : s.view === 'import' ? <div className="flex flex-col h-screen w-full">
       <div className="flex-none p-4 border-b border-border bg-background flex items-center">
         <div className="flex-1">
@@ -645,9 +643,7 @@ export default function GlossaryApp() {
           </div>
         </div>
       </div>
-      <div className="p-2 text-center">
-        <p className="text-xs text-muted-foreground">{APP_VERSION}</p>
-      </div>
+      <Footer />
     </div> : <div className="flex flex-col w-full">
       <div className="flex-none p-4 border-b border-border bg-background flex items-center sticky top-0 z-10">
         <div className="flex-1">
@@ -706,9 +702,7 @@ export default function GlossaryApp() {
           <Button onClick={h.save} disabled={s.loading}>Save</Button>
         </div>
       </div>
-      <div className="p-2 text-center">
-        <p className="text-xs text-muted-foreground">{APP_VERSION}</p>
-      </div>
+      <Footer />
     </div>}
   </div>;
 }

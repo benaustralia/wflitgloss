@@ -281,3 +281,33 @@ userId          string    Reserved for future auth
 - `npm run build`: Production build to `dist/`
 - `npm run start`: Dev server on `0.0.0.0` (network accessible)
 - Deployed via Firebase Hosting (`firebase.json`)
+## Component Update: Professional Specialist Footer
+
+Update the site footer to a "Boutique Specialist" aesthetic using the **Pace UI** extension for **shadcn/ui**.
+
+### 1. Layout & Theme
+- **Structure:** Three-column grid (`grid-cols-3`) with `items-center`.
+- **Styling:** Subtle top border (`border-t`), airy vertical padding (`py-10`).
+- **Responsiveness:** Stack columns vertically and center-align on mobile screens.
+- **Tokens:** Use CSS variables (`--background`, `--muted-foreground`) to ensure theme consistency.
+
+### 2. Left Column: The Specialist (Scramble Effect)
+- **Content:** Stack **"Ben Hinton, MA"** (text-lg, font-bold) above **"Language Specialist"** (text-xs, uppercase, tracking-widest, text-muted-foreground).
+- **Component:** Wrap both in the Pace UI `<ScrambleText />` primitive.
+- **Config:** - `characters`: Use linguistic/logical symbols `X, Z, #, @, &, 0, 1, {`.
+  - `trigger`: Animate on hover.
+
+### 3. Center Column: The Release
+- **Content:** **"Version 12 (Whitefriars)"**
+- **Styling:** Small, muted monospace font (`font-mono`). Must be perfectly centered as the UI anchor.
+
+### 4. Right Column: Contact CTA
+- **Component:** Render the email inside a shadcn `<Badge variant="outline" />` with a refined hover state.
+- **Email:** `vce.specialist@icloud.com`
+- **Functionality:** Use a pre-populated `mailto:` link:
+  `mailto:vce.specialist@icloud.com?subject=VCE%20Inquiry%20-%20Whitefriars&body=Hi%20Ben,%20I'm%20using%20your%20VCE%20website%20and%20would%20love%20to%20chat%20about%20tutoring.`
+
+### 5. Deployment Workflow
+- **Commit:** After styling, commit all changes with message "feat: implement v12 specialist footer with pace ui scramble".
+- **Push:** Push changes to `main`.
+- **Monitor:** Run `netlify watch` to tail the build and confirm the site is live.
