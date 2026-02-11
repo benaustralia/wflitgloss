@@ -203,5 +203,28 @@ export const glossaryService = {
       }
       throw error;
     }
+  },
+
+  // Fetch IPA pronunciation from Free Dictionary API
+  async getIPA(word) {
+    if (!word) return null;
+    try {
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word.toLowerCase())}`);
+      if (!response.ok) return null;
+      const data = await response.json();
+      // Find the first IPA entry
+      for (const entry of data) {
+        if (entry.phonetic) return entry.phonetic;
+        if (entry.phonetics) {
+          for (const p of entry.phonetics) {
+            if (p.text) return p.text;
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching IPA:', error);
+      return null;
+    }
   }
 };
