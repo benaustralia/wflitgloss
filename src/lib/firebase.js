@@ -29,7 +29,6 @@ try {
   storage = getStorage(app);
   
   // Log successful initialization
-  // console.log('Firebase initialized successfully');
 } catch (error) {
   console.error('Error initializing Firebase:', error);
   throw new Error(`Firebase initialization failed: ${error.message}`);
