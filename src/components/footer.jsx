@@ -11,17 +11,17 @@ export function Footer() {
   return (
     <footer className="border-t border-border py-10 px-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-6 sm:gap-4 max-w-xl mx-auto text-center sm:text-left">
-        {/* Left: The Specialist */}
-        <div className="flex flex-col items-center sm:items-start">
+        {/* Left: The Specialist – overflow-hidden prevents scramble width changes from reflowing the grid */}
+        <div className="overflow-hidden">
           <ScrambleText
             chars={SCRAMBLE_CHARS}
-            className="text-lg font-bold text-foreground"
+            className="text-lg font-bold text-foreground whitespace-nowrap"
           >
             Ben Hinton, MA
           </ScrambleText>
           <ScrambleText
             chars={SCRAMBLE_CHARS}
-            className="text-xs uppercase tracking-widest text-muted-foreground"
+            className="text-xs uppercase tracking-widest text-muted-foreground whitespace-nowrap"
           >
             Language Specialist
           </ScrambleText>
