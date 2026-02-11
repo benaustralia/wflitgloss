@@ -37,7 +37,18 @@ export const ScrambleText = ({
         if (scrambleOnLoad) scramble();
         const target = wrapperRef.current;
         target?.addEventListener("pointerenter", scramble);
-        return () => target?.removeEventListener("pointerenter", scramble);
+
+        // Re-scramble every time the element scrolls into view
+        const observer = new IntersectionObserver(
+            ([entry]) => { if (entry.isIntersecting) scramble(); },
+            { threshold: 0.1 }
+        );
+        if (target) observer.observe(target);
+
+        return () => {
+            target?.removeEventListener("pointerenter", scramble);
+            observer.disconnect();
+        };
     }, [wrapperRef, scramble, scrambleOnLoad]);
 
     return <div {...props} ref={wrapperRef} />;
