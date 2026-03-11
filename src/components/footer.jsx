@@ -1,11 +1,8 @@
 import { ScrambleText } from "@/components/gsap/scramble-text";
 import { Badge } from "@/components/ui/badge";
-import { Mail } from "lucide-react";
+import { Phone } from "lucide-react";
 
 const SCRAMBLE_CHARS = "XZ#@&01{";
-
-const MAILTO_LINK =
-  "mailto:vce.specialist@icloud.com?subject=VCE%20Inquiry%20-%20Whitefriars&body=Hi%20Ben,%20I'm%20using%20your%20VCE%20website%20and%20would%20love%20to%20chat%20about%20tutoring.";
 
 export function Footer() {
   return (
@@ -36,13 +33,13 @@ export function Footer() {
 
         {/* Right: Contact CTA */}
         <div className="flex justify-center sm:justify-end">
-          <a href={MAILTO_LINK} className="no-underline">
+          <a href="tel:+61490138807" className="no-underline">
             <Badge
               variant="outline"
               className="cursor-pointer gap-1.5 px-3 py-1 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
             >
-              <Mail className="h-3 w-3" />
-              vce.specialist@icloud.com
+              <Phone className="h-3 w-3" />
+              0490 138 807
             </Badge>
           </a>
         </div>

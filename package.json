@@ -1,7 +1,7 @@
 {
-  "name": "litgloss",
+  "name": "shakelear",
   "version": "1.0.0",
-  "description": "A pronunciation-focused glossary application",
+  "description": "Shakespeare glossary and Lear-ifier for VCE",
   "type": "module",
   "main": "index.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "start": "vite --host 0.0.0.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@gsap/react": "^2.1.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.15",
