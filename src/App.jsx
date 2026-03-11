@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { TranslationPanel } from '@/components/learifier';
+import { WordSheet } from '@/components/word-sheet';
+import { translate } from '@/learifier-api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Plus, Search, ArrowLeft, Tag, X, ChevronDown, Volume2, Package, Upload, Download, Copy, Sparkles } from 'lucide-react';
+import { Plus, Search, ArrowLeft, Tag, X, ChevronDown, Volume2, Package, Upload, Download, Copy, Sparkles, Languages } from 'lucide-react';
 import { Footer } from '@/components/footer';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
@@ -26,13 +29,15 @@ import { glossaryService } from '@/lib/glossaryService';
 const debounce = (func, wait) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; };
 
 export default function GlossaryApp() {
+  const [translation, setTranslation] = useState({ words: [], loading: false, error: null, activeWord: null });
   const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', tags: [], selectedTag: 'all', loading: true, error: null, localTerm: null, newTag: '', importJson: '', importStatus: '', tagDropdownOpen: false, isGeneratingAudio: false, fetchingIPA: false, flashId: null });
   
   // Create a ref that always points to the latest state to avoid stale closures in async handlers
   const sRef = useRef(s);
   useEffect(() => { sRef.current = s; }, [s]);
 
-  const update = (u) => setS(p => typeof u === 'function' ? u(p) : { ...p, ...u }) ;
+  const update = (u) => setS(p => typeof u === 'function' ? u(p) : { ...p, ...u });
+  const updateSearch = (val) => { update({ search: val }); setTranslation({ words: [], loading: false, error: null, activeWord: null }); };
   const pendingAddRef = useRef(null);
   useEffect(() => { (async () => { try { update({ loading: true, error: null }); const allTerms = await glossaryService.getAllTerms(); const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); update({ terms: allTerms, tags: allTags, error: null, loading: false }); } catch (err) { const errorMessage = err.message || 'Failed to load data. Please check Firebase configuration.'; console.error('Failed to load glossary data:', err); update({ error: errorMessage, loading: false }); } })(); }, []);
   useEffect(() => { const handleClickOutside = (e) => { if (s.tagDropdownOpen && !e.target.closest('.tag-dropdown')) { update({ tagDropdownOpen: false }); } }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, [s.tagDropdownOpen]);
@@ -414,7 +419,7 @@ export default function GlossaryApp() {
       const url = URL.createObjectURL(blob); 
       const a = document.createElement('a'); 
       a.href = url; 
-      a.download = `litgloss-export-${new Date().toISOString().split('T')[0]}.json`; 
+      a.download = `shakelear-export-${new Date().toISOString().split('T')[0]}.json`; 
       document.body.appendChild(a); 
       a.click(); 
       document.body.removeChild(a); 
@@ -534,19 +539,19 @@ export default function GlossaryApp() {
 
   return <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex flex-col">
     <Toaster />
-    {s.view === 'list' ? <div className="flex flex-col h-screen w-full">
-        <div className="text-center mb-6 px-4 pt-8">
-          <h1 className="text-5xl font-bold text-primary animate-in fade-in slide-in-from-bottom-4 duration-1000">litgloss</h1>
-          <h2 className="text-xl text-muted-foreground mt-2 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">Whitefriars 2026</h2>
-        </div>
-        <div className="flex gap-2 items-center px-4">
+    <div className="flex-none px-4 pt-8 pb-0 text-center">
+      <h1 className="text-5xl font-bold text-primary animate-in fade-in slide-in-from-bottom-4 duration-1000">Shake-o-Lingo</h1>
+      <h2 className="text-xl text-muted-foreground mt-2 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">Whitefriars 2026</h2>
+    </div>
+    {(s.view === 'list' ? <div className="flex flex-col flex-1 w-full">
+        <div className="flex gap-2 items-center px-4 pt-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder="Search" 
               value={s.search} 
-              onChange={(e) => update({ search: e.target.value })} 
-              className="w-full pl-10 h-10 text-sm" 
+              onChange={(e) => updateSearch(e.target.value)}
+              className="w-full pl-10 h-10 text-sm"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   const term = e.target.value.trim();
@@ -587,11 +592,39 @@ export default function GlossaryApp() {
                 <div className="text-sm text-muted-foreground line-clamp-2 break-words">{term.definition || "Tap to add definition"}</div>
                 {term.tags && term.tags.length > 0 && <div className="flex flex-wrap gap-1">{term.tags.map(tag => <span key={tag} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-primary/10 text-primary"><Tag className="h-2 w-2 mr-1" />{tag}</span>)}</div>}
               </div>)}
-              {(!s.terms || s.terms.length === 0) && <div className="p-8 text-center text-muted-foreground">{s.search ? 'No matches - press Enter to create' : 'No terms yet'}</div>}
+              {getFilteredTerms().length === 0 && !s.search && <div className="p-8 text-center text-muted-foreground">No terms yet</div>}
             </div>
           </ScrollArea>
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none"></div>
         </div>
+        {s.search.trim() && getFilteredTerms().length === 0 && (
+          <div className="px-4 py-4 border-t border-border">
+            <Button
+              className="w-full"
+              variant="outline"
+              disabled={translation.loading || s.search.trim().split(/\s+/).length < 3}
+              onClick={async () => {
+                setTranslation(t => ({ ...t, loading: true, error: null, words: [] }));
+                try {
+                  const result = await translate(s.search);
+                  setTranslation(t => ({ ...t, words: result ?? [], loading: false }));
+                } catch (e) {
+                  setTranslation(t => ({ ...t, error: e.message, loading: false }));
+                }
+              }}
+            >
+              <Languages />
+              {s.search.trim().split(/\s+/).length < 3 ? 'Enter at least 3 words to translate' : 'Translate into Shakespearean'}
+            </Button>
+            {translation.error && <p className="mt-2 text-destructive text-xs">{translation.error}</p>}
+            <TranslationPanel
+              words={translation.words}
+              loading={translation.loading}
+              onTap={(word) => setTranslation(t => ({ ...t, activeWord: word }))}
+            />
+          </div>
+        )}
+        <WordSheet word={translation.activeWord} onClose={() => setTranslation(t => ({ ...t, activeWord: null }))} />
         <Footer />
       </div> : s.view === 'import' ? <div className="flex flex-col h-screen w-full">
       <div className="flex-none p-4 border-b border-border bg-background flex items-center">
@@ -703,6 +736,6 @@ export default function GlossaryApp() {
         </div>
       </div>
       <Footer />
-    </div>}
+    </div>)}
   </div>;
 }
