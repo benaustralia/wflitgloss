@@ -51,8 +51,9 @@ async function getSynonyms(word) {
 // related = phrase entries starting with key (e.g. "sleep upon" for "sleep")
 async function fetchFromShakespeare(key) {
   if (wordCache.has(key)) return wordCache.get(key)
-  // Autocomplete API breaks on hyphens — query only the first component
-  const queryKey = key.includes('-') ? key.split('-')[0] : key
+  // Send the full word — API handles hyphens fine.
+  // Strip apostrophes as they crash the server (send "favoured" not "favour'd")
+  const queryKey = key.replace(/['\u2018\u2019\u02bc]/g, '')
   try {
     const res = await fetch('/api/shakespeare', {
       method: 'POST',
