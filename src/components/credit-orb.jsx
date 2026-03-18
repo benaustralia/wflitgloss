@@ -58,7 +58,7 @@ export function CreditOrb() {
             </div>
             <div className="flex flex-col items-center gap-2 pt-2 border-t border-border">
               <Ring size={100} strokeWidth={7} pct={pct} color={color} />
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em]" style={{ color }}>AI Credits</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-muted-foreground">AI Credits</p>
               <p className="text-xs text-muted-foreground font-mono">${remaining.toFixed(2)}/{BUDGET.toFixed(2)} | {translations} translation{translations !== 1 ? 's' : ''}</p>
             </div>
           </div>

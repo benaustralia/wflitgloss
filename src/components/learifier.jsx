@@ -6,20 +6,19 @@ import { cn } from '@/lib/utils'
 
 function WordToken({ word, onTap }) {
   const tappable = word.type === 'essential' || word.type === 'translated'
-  return (
-    <span
-      className={cn(
-        'word-token inline-block mr-[0.3em] my-1',
-        tappable && 'text-violet-500 cursor-pointer hover:text-violet-500/70',
-        word.type === 'untranslated' && 'text-muted-foreground/40',
-        word.isMadness && 'madness-word',
-      )}
-      onMouseEnter={tappable ? () => warmWord(word) : undefined}
-      onClick={tappable ? () => onTap(word) : undefined}
-    >
-      {word.pre}{word.core}{word.post}
-    </span>
+  const cls = cn(
+    'word-token inline-block mr-[0.3em] my-1',
+    tappable && 'text-violet-600 hover:text-violet-600/70',
+    word.type === 'untranslated' && 'text-muted-foreground',
+    word.isMadness && 'madness-word',
   )
+  if (tappable) return (
+    <button type="button" className={cn(cls, 'cursor-pointer bg-transparent border-0 p-0')}
+      style={{ font: 'inherit' }} onMouseEnter={() => warmWord(word)} onClick={() => onTap(word)}>
+      {word.pre}{word.core}{word.post}
+    </button>
+  )
+  return <span className={cls}>{word.pre}{word.core}{word.post}</span>
 }
 
 const DOT = 'w-1.5 h-1.5 rounded-full inline-block'
@@ -27,11 +26,11 @@ const DOT = 'w-1.5 h-1.5 rounded-full inline-block'
 export function TranslationKey() {
   return (
     <div className="flex items-center gap-5 px-4 py-2">
-      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-violet-500">
-        <span className={cn(DOT, 'bg-violet-500')} /> translated
+      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-violet-600">
+        <span className={cn(DOT, 'bg-violet-600')} /> translated
       </span>
-      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground/40">
-        <span className={cn(DOT, 'bg-muted-foreground/40')} /> unchanged
+      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        <span className={cn(DOT, 'bg-muted-foreground')} /> unchanged
       </span>
     </div>
   )

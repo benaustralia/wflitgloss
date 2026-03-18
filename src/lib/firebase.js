@@ -1,35 +1,16 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app'
+import { getFirestore } from 'firebase/firestore'
 
-// Your Firebase configuration
 const firebaseConfig = {
-  apiKey: "VITE_FIREBASE_API_KEY_REDACTED",
-  authDomain: "wflitgloss.firebaseapp.com",
-  projectId: "wflitgloss",
-  storageBucket: "wflitgloss.firebasestorage.app",
-  messagingSenderId: "328667674464",
-  appId: "1:328667674464:web:33ed99281c32dba6005005",
-  measurementId: "G-6PKHP3E0R4"
-};
-
-// Validate Firebase configuration
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  console.error('Firebase configuration is incomplete. Please check your Firebase config.');
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId:     import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
-// Initialize Firebase
-let app;
-let db;
-
-try {
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  
-  // Log successful initialization
-} catch (error) {
-  console.error('Error initializing Firebase:', error);
-  throw new Error(`Firebase initialization failed: ${error.message}`);
-}
-
-export { db };
-export default app;
+const app = initializeApp(firebaseConfig)
+export const db = getFirestore(app)
+export default app
