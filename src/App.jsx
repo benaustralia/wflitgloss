@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TranslationPanel, WordTokens } from '@/components/learifier';
 import { WordSheet } from '@/components/word-sheet';
-import { translate, warmWord } from '@/learifier-api';
+import { translate, warmWord, prewarmCommon } from '@/learifier-api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -69,6 +69,7 @@ export default function GlossaryApp() {
   };
 
   const pendingAddRef = useRef(null);
+  useEffect(() => { prewarmCommon(); }, []);
   useEffect(() => { (async () => { try { update({ loading: true, error: null }); const allTerms = await glossaryService.getAllTerms(); const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); update({ terms: allTerms, tags: allTags, error: null, loading: false }); } catch (err) { const errorMessage = err.message || 'Failed to load data. Please check Firebase configuration.'; console.error('Failed to load glossary data:', err); update({ error: errorMessage, loading: false }); } })(); }, []);
   useEffect(() => { 
     const handleEscape = async (e) => { 

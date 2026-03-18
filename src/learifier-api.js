@@ -55,10 +55,7 @@ async function fetchFromShakespeare(key) {
   // Strip apostrophes as they crash the server (send "favoured" not "favour'd")
   const queryKey = key.replace(/['\u2018\u2019\u02bc]/g, '')
   try {
-    const res = await fetch('/api/shakespeare', {
-      method: 'POST',
-      body: JSON.stringify({ commandName: 'cmd_autocomplete', parameters: queryKey }),
-    })
+    const res = await fetch(`/api/shakespeare?q=${encodeURIComponent(queryKey)}`)
     const data = await res.json()
     const results = JSON.parse(data.parameters)
     // Normalise apostrophes and British/American -our/-or spelling variants
@@ -80,6 +77,18 @@ async function fetchFromShakespeare(key) {
 
 // Warm the shakespeareswords cache for a single word on hover intent.
 // Called from the word token's onMouseEnter — fires at most once per word per session.
+// Pre-warm cache for the most frequent Elizabethan words so first taps are instant.
+// Staggered 80ms apart to avoid a burst against shakespeareswords.com on load.
+const COMMON_WORDS = [
+  'thee', 'thy', 'thou', 'art', 'hath', 'doth', 'wilt', 'shalt',
+  'dost', 'hast', 'wherefore', 'whither', 'thine', 'ye', 'nay',
+]
+export function prewarmCommon() {
+  COMMON_WORDS.forEach((w, i) => {
+    if (!wordCache.has(w)) setTimeout(() => fetchFromShakespeare(w).catch(() => {}), i * 80)
+  })
+}
+
 export function warmWord(word) {
   const key = (word.forms?.[0] ?? word.core).toLowerCase()
   if (!wordCache.has(key)) fetchFromShakespeare(key).catch(() => {})
@@ -94,8 +103,15 @@ export function warmWord(word) {
 //   direct  = definitions for the exact Elizabethan word, filtered to contextual meaning
 //   related = phrase entries (e.g. "sleep upon") or fallback entries from the original word
 export async function lookupShakespeare(word, originalWord = null) {
-  const key = word.toLowerCase()
-  const { exact, related } = await fetchFromShakespeare(key)
+  const key     = word.toLowerCase()
+  const origKey = originalWord ? originalWord.replace(/[^a-z']/gi, '').toLowerCase() : null
+
+  // Fire both fetches in parallel — origKey fallback is needed if exact is empty
+  const [primary, fallback] = await Promise.all([
+    fetchFromShakespeare(key),
+    origKey && origKey !== key ? fetchFromShakespeare(origKey) : Promise.resolve(null),
+  ])
+  const { exact, related } = primary
 
   // Filter exact matches to the definition(s) most relevant to the original meaning
   let direct = exact
@@ -110,14 +126,10 @@ export async function lookupShakespeare(word, originalWord = null) {
     if (relevant.length > 0) direct = relevant
   }
 
-  // If no exact entries, fall back to the original modern word — its entries go into related
+  // If no exact entries, use the pre-fetched fallback entries
   let relatedEntries = related
-  if (exact.length === 0 && originalWord) {
-    const origKey = originalWord.replace(/[^a-z']/gi, '').toLowerCase()
-    if (origKey !== key) {
-      const fallback = await fetchFromShakespeare(origKey)
-      relatedEntries = [...related, ...fallback.exact, ...fallback.related]
-    }
+  if (exact.length === 0 && fallback) {
+    relatedEntries = [...related, ...fallback.exact, ...fallback.related]
   }
 
   return { direct, related: relatedEntries }
