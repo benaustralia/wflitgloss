@@ -68,7 +68,7 @@ async function fetchFromShakespeare(key) {
     const related = valid.filter(r => norm(r.Headword) !== normKey && norm(r.Headword).startsWith(normKey))
     const result  = { exact, related }
     wordCache.set(key, result)
-    console.debug(`[shxp] fetch "${key}" → ${exact.length} exact, ${related.length} related (${Math.round(performance.now() - t0)}ms)`)
+    console.log(`[shxp] fetch "${key}" → ${exact.length} exact, ${related.length} related (${Math.round(performance.now() - t0)}ms)`)
     return result
   } catch (err) {
     console.warn(`[shxp] fetch "${key}" failed (${Math.round(performance.now() - t0)}ms):`, err)
@@ -112,7 +112,7 @@ export async function lookupShakespeare(word, originalWord = null) {
 
   const primaryCached  = wordCache.has(key)
   const fallbackCached = origKey && origKey !== key ? wordCache.has(origKey) : null
-  console.debug(`[shxp] lookup "${key}"${origKey && origKey !== key ? ` + "${origKey}"` : ''} | cache: primary=${primaryCached}, fallback=${fallbackCached ?? 'n/a'}`)
+  console.log(`[shxp] lookup "${key}"${origKey && origKey !== key ? ` + "${origKey}"` : ''} | cache: primary=${primaryCached}, fallback=${fallbackCached ?? 'n/a'}`)
 
   // Fire both fetches in parallel — origKey fallback is needed if exact is empty
   const [primary, fallback] = await Promise.all([
@@ -140,7 +140,7 @@ export async function lookupShakespeare(word, originalWord = null) {
     relatedEntries = [...related, ...fallback.exact, ...fallback.related]
   }
 
-  console.debug(`[shxp] lookup "${key}" done → ${direct.length} direct, ${relatedEntries.length} related (${Math.round(performance.now() - t0)}ms total)`)
+  console.log(`[shxp] lookup "${key}" done → ${direct.length} direct, ${relatedEntries.length} related (${Math.round(performance.now() - t0)}ms total)`)
   return { direct, related: relatedEntries }
 }
 
