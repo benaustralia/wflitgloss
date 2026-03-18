@@ -72,7 +72,7 @@ export function CreditOrb() {
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm" aria-describedby={undefined}>
           {/* Hidden title for accessibility */}
           <DialogHeader className="sr-only">
             <DialogTitle>AI Credits</DialogTitle>

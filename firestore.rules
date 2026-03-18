@@ -8,6 +8,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
     
+    // Allow read/write on shared credit counter
+    match /config/credits {
+      allow read, write: if true;
+    }
+
     // Fallback rule for any other collections (more restrictive)
     match /{document=**} {
       allow read, write: if false;
