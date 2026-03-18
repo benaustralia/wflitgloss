@@ -78,25 +78,14 @@ async function fetchFromShakespeare(key) {
   }
 }
 
-// Prefetch shakespeareswords for all tappable words right after translation,
-// so wordCache is warm before the user taps anything.
-export function prefetchWords(words) {
-  const seen = new Set()
-  for (const w of words) {
-    if (w.type === 'untranslated') continue
-    const key = (w.forms?.[0] ?? w.core).toLowerCase()
-    if (!seen.has(key) && !wordCache.has(key)) {
-      seen.add(key)
-      fetchFromShakespeare(key).catch(() => {})
-    }
-    // Also warm the original-word fallback cache
-    if (w.original) {
-      const origKey = w.original.replace(/[^a-z']/gi, '').toLowerCase()
-      if (origKey && origKey !== key && !seen.has(origKey) && !wordCache.has(origKey)) {
-        seen.add(origKey)
-        fetchFromShakespeare(origKey).catch(() => {})
-      }
-    }
+// Warm the shakespeareswords cache for a single word on hover intent.
+// Called from the word token's onMouseEnter — fires at most once per word per session.
+export function warmWord(word) {
+  const key = (word.forms?.[0] ?? word.core).toLowerCase()
+  if (!wordCache.has(key)) fetchFromShakespeare(key).catch(() => {})
+  if (word.original) {
+    const origKey = word.original.replace(/[^a-z']/gi, '').toLowerCase()
+    if (origKey && origKey !== key && !wordCache.has(origKey)) fetchFromShakespeare(origKey).catch(() => {})
   }
 }
 

@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
+import { warmWord } from '@/learifier-api'
 
 function WordToken({ word, onTap }) {
   const cls = [
@@ -11,8 +12,13 @@ function WordToken({ word, onTap }) {
     word.isMadness               && 'madness-word',
   ].filter(Boolean).join(' ')
 
+  const tappable = word.type === 'essential' || word.type === 'translated'
   return (
-    <span className={cls} onClick={() => (word.type === 'essential' || word.type === 'translated') && onTap(word)}>
+    <span
+      className={cls}
+      onMouseEnter={tappable ? () => warmWord(word) : undefined}
+      onClick={tappable ? () => onTap(word) : undefined}
+    >
       {word.pre}{word.core}{word.post}
     </span>
   )
