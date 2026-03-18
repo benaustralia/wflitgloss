@@ -18,6 +18,19 @@ const wordCache     = new Map()  // shakespeareswords cache (word-sheet lookups)
 const inflightCache = new Map()  // deduplicates concurrent fetches for the same word
 const datamuseCache = new Map()
 
+// Puppeteer-accessible diagnostic log —————————————————————————————————————
+// Writes to window.__log so Puppeteer can call window.__log at any time.
+// window.__logReport() returns a newline-joined summary string.
+if (typeof window !== 'undefined') {
+  window.__log = window.__log ?? []
+  window.__logReport = () => window.__log.join('\n')
+}
+function diag(msg) {
+  console.log(msg)
+  if (typeof window !== 'undefined') window.__log.push(msg)
+}
+// —————————————————————————————————————————————————————————————————————————
+
 const STOPWORDS = new Set([
   'i', 'me', 'my', 'we', 'us', 'our', 'you', 'your', 'he', 'him', 'his',
   'she', 'her', 'it', 'its', 'they', 'them', 'their', 'this', 'that',
@@ -79,10 +92,10 @@ async function fetchFromShakespeare(key) {
       const related = valid.filter(r => norm(r.Headword) !== normKey && norm(r.Headword).startsWith(normKey))
       const result  = { exact, related }
       wordCache.set(key, result)
-      console.log(`[shxp] fetch "${key}" (queried "${queryKey}") → ${exact.length} exact, ${related.length} related (${Math.round(performance.now() - t0)}ms)`)
+      diag(`[shxp] fetch "${key}" (queried "${queryKey}") → ${exact.length} exact, ${related.length} related (${Math.round(performance.now() - t0)}ms)`)
       return result
     } catch (err) {
-      console.warn(`[shxp] fetch "${key}" failed (${Math.round(performance.now() - t0)}ms):`, err)
+      diag(`[shxp] fetch "${key}" FAILED (${Math.round(performance.now() - t0)}ms): ${err.message}`)
       const empty = { exact: [], related: [] }
       wordCache.set(key, empty)
       return empty
@@ -129,7 +142,7 @@ export async function lookupShakespeare(word, originalWord = null) {
 
   const primaryCached  = wordCache.has(key)
   const fallbackCached = origKey && origKey !== key ? wordCache.has(origKey) : null
-  console.log(`[shxp] lookup "${key}"${origKey && origKey !== key ? ` + "${origKey}"` : ''} | cache: primary=${primaryCached}, fallback=${fallbackCached ?? 'n/a'}`)
+  diag(`[shxp] lookup "${key}"${origKey && origKey !== key ? ` + "${origKey}"` : ''} | cache: primary=${primaryCached}, fallback=${fallbackCached ?? 'n/a'}`)
 
   // Fire both fetches in parallel — origKey fallback is needed if exact is empty
   const [primary, fallback] = await Promise.all([
@@ -157,7 +170,7 @@ export async function lookupShakespeare(word, originalWord = null) {
     relatedEntries = [...related, ...fallback.exact, ...fallback.related]
   }
 
-  console.log(`[shxp] lookup "${key}" done → ${direct.length} direct, ${relatedEntries.length} related (${Math.round(performance.now() - t0)}ms total)`)
+  diag(`[shxp] lookup "${key}" done → ${direct.length} direct, ${relatedEntries.length} related (${Math.round(performance.now() - t0)}ms total)`)
   return { direct, related: relatedEntries }
 }
 

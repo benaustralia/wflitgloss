@@ -50,16 +50,17 @@ export function WordSheet({ word, onClose }) {
     gsap.to(sheetRef.current,    { y: 0, duration: 0.42, ease: 'power3.out', overwrite: true })
     gsap.to(backdropRef.current, { opacity: 1, pointerEvents: 'auto', duration: 0.25, overwrite: true })
     const t0 = performance.now()
-    console.log(`[sheet] tap "${word.core}" — lookup start`)
+    const _diag = msg => { console.log(msg); if (typeof window !== 'undefined') (window.__log = window.__log ?? []).push(msg) }
+    _diag(`[sheet] tap "${word.core}" — lookup start`)
     lookupShakespeare(word.forms?.[0] ?? word.core, word.vce_note ? null : word.original)
       .then(results => {
         const ms = Math.round(performance.now() - t0)
         const total = results.direct.length + results.related.length
         const empty = total === 0 && !word.vce_note
-        console.log(`[sheet] "${word.core}" — ${total} entries in ${ms}ms${empty ? ' ⚠️ EMPTY' : ''}`)
+        _diag(`[sheet] "${word.core}" — ${total} entries in ${ms}ms${empty ? ' ⚠️ EMPTY' : ''}`)
         setEntries(results)
       })
-      .catch(err => console.error(`[sheet] "${word.core}" lookup error:`, err))
+      .catch(err => { const msg = `[sheet] "${word.core}" ERROR: ${err.message}`; console.error(msg); if (typeof window !== 'undefined') (window.__log ?? []).push(msg) })
   }, [word])
 
   // Escape key
