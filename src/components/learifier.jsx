@@ -6,8 +6,7 @@ import { warmWord } from '@/learifier-api'
 function WordToken({ word, onTap }) {
   const cls = [
     'word-token inline-block mr-[0.3em] my-1',
-    word.type === 'essential'    && 'text-amber-500 font-bold cursor-pointer hover:text-amber-400',
-    word.type === 'translated'   && 'text-foreground cursor-pointer hover:text-foreground/70',
+    (word.type === 'essential' || word.type === 'translated') && 'text-foreground cursor-pointer hover:text-foreground/70',
     word.type === 'untranslated' && 'text-muted-foreground/50',
     word.isMadness               && 'madness-word',
   ].filter(Boolean).join(' ')
@@ -71,9 +70,6 @@ export function TranslationPanel({ words, loading, onTap }) {
         {words.map((word, i) => <WordToken key={i} word={word} onTap={onTap} />)}
       </p>
       <div className="mt-4 flex items-center gap-5">
-        <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-amber-500">
-          <span className={`${DOT} bg-amber-500`} /> essential
-        </span>
         <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground">
           <span className={`${DOT} bg-foreground`} /> translated
         </span>
