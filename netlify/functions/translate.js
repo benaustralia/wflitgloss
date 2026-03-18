@@ -10,11 +10,10 @@ Vocabulary hints: If the input contains a [Vocab:...] block, each entry lists mo
 
 export default async (request) => {
   const { text, vocabHints } = await request.json()
-  if (!text?.trim()) {
-    return new Response('', { status: 400 })
-  }
+  if (!text?.trim()) return new Response('', { status: 400 })
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY
+  const client = new Anthropic({ apiKey })
   const userMessage = vocabHints ? `${text}\n[Vocab: ${vocabHints}]` : text
 
   const stream = await client.messages.stream({
@@ -45,4 +44,4 @@ export default async (request) => {
   })
 }
 
-export const config = { path: '/api/translate' }
+export const config = { path: '/api/translate', streaming: true }
