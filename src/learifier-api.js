@@ -59,8 +59,11 @@ async function fetchFromShakespeare(key) {
     const data = await res.json()
     const results = JSON.parse(data.parameters)
     const valid   = results.filter(r => r.Definition && !r.Headword.startsWith('Do you mean:'))
-    const exact   = valid.filter(r => r.Headword.toLowerCase() === key)
-    const related = valid.filter(r => r.Headword.toLowerCase() !== key && r.Headword.toLowerCase().startsWith(key))
+    // Normalise apostrophes/curly-quotes so "favour'd" matches "favoured"
+    const norm    = s => s.toLowerCase().replace(/['\u2018\u2019]/g, '')
+    const normKey = norm(key)
+    const exact   = valid.filter(r => norm(r.Headword) === normKey)
+    const related = valid.filter(r => norm(r.Headword) !== normKey && norm(r.Headword).startsWith(normKey))
     const result  = { exact, related }
     wordCache.set(key, result)
     return result
