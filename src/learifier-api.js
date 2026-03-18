@@ -51,17 +51,20 @@ async function getSynonyms(word) {
 // related = phrase entries starting with key (e.g. "sleep upon" for "sleep")
 async function fetchFromShakespeare(key) {
   if (wordCache.has(key)) return wordCache.get(key)
+  // Autocomplete API breaks on hyphens — query only the first component
+  const queryKey = key.includes('-') ? key.split('-')[0] : key
   try {
     const res = await fetch('/api/shakespeare', {
       method: 'POST',
-      body: JSON.stringify({ commandName: 'cmd_autocomplete', parameters: key }),
+      body: JSON.stringify({ commandName: 'cmd_autocomplete', parameters: queryKey }),
     })
     const data = await res.json()
     const results = JSON.parse(data.parameters)
-    const valid   = results.filter(r => r.Definition && !r.Headword.startsWith('Do you mean:'))
-    // Normalise apostrophes/curly-quotes so "favour'd" matches "favoured"
-    const norm    = s => s.toLowerCase().replace(/['\u2018\u2019]/g, '')
+    // Normalise apostrophes and British/American -our/-or spelling variants
+    // so "ill-favour'd" matches "ill-favored"
+    const norm    = s => s.toLowerCase().replace(/['\u2018\u2019]/g, '').replace(/our/g, 'or')
     const normKey = norm(key)
+    const valid   = results.filter(r => r.Definition && !r.Headword.startsWith('Do you mean:'))
     const exact   = valid.filter(r => norm(r.Headword) === normKey)
     const related = valid.filter(r => norm(r.Headword) !== normKey && norm(r.Headword).startsWith(normKey))
     const result  = { exact, related }
