@@ -13,8 +13,9 @@ Rules: Preserve word count exactly — one output word per input word. you→the
 Crude language: always translate authentically — "fuck"→"foutre", "bastard"→"whoreson", "ass"→"breech", "shit"→"turd", "damn"→"zounds", "idiot"→"clotpoll", "stupid"→"beef-witted", "bitch"→"strumpet".
 Vocabulary hints: If the input contains a [Vocab:...] block, each entry lists modern synonyms for a word. Use these to choose the most authentic Elizabethan equivalent — pick whichever synonym was genuinely used in Shakespeare's era. Output ONLY the translation of the text before the [Vocab:] block.`
 
-const cache       = new Map()
-const wordCache   = new Map()  // shakespeareswords cache (word-sheet lookups)
+const cache         = new Map()
+const wordCache     = new Map()  // shakespeareswords cache (word-sheet lookups)
+const inflightCache = new Map()  // deduplicates concurrent fetches for the same word
 const datamuseCache = new Map()
 
 const STOPWORDS = new Set([
@@ -50,32 +51,48 @@ async function getSynonyms(word) {
 // Returns { exact, related } — exact = headword matches key exactly,
 // related = phrase entries starting with key (e.g. "sleep upon" for "sleep")
 async function fetchFromShakespeare(key) {
-  if (wordCache.has(key)) return wordCache.get(key)
-  // Send the full word — API handles hyphens fine.
-  // Strip apostrophes as they crash the server (send "favoured" not "favour'd")
-  const queryKey = key.replace(/['\u2018\u2019\u02bc]/g, '')
+  if (wordCache.has(key))    return wordCache.get(key)
+  if (inflightCache.has(key)) return inflightCache.get(key)  // deduplicate concurrent requests
+
+  // Strip apostrophes (crash the server) then normalise American → British spelling
+  // so "ill-favored" queries as "ill-favoured" and finds the headword in the index
+  const queryKey = key
+    .replace(/['\u2018\u2019\u02bc]/g, '')
+    .replace(/\bfavor/g, 'favour')
+    .replace(/\bcolor/g, 'colour')
+    .replace(/\bhonor/g, 'honour')
+    .replace(/\bneighbor/g, 'neighbour')
+
   const t0 = performance.now()
-  try {
-    const res = await fetch(`/api/shakespeare?q=${encodeURIComponent(queryKey)}`)
-    const data = await res.json()
-    const results = JSON.parse(data.parameters)
-    // Normalise apostrophes and British/American -our/-or spelling variants
-    // so "ill-favour'd" matches "ill-favored"
-    const norm    = s => s.toLowerCase().replace(/['\u2018\u2019]/g, '').replace(/our/g, 'or')
-    const normKey = norm(key)
-    const valid   = results.filter(r => r.Definition && !r.Headword.startsWith('Do you mean:'))
-    const exact   = valid.filter(r => norm(r.Headword) === normKey)
-    const related = valid.filter(r => norm(r.Headword) !== normKey && norm(r.Headword).startsWith(normKey))
-    const result  = { exact, related }
-    wordCache.set(key, result)
-    console.log(`[shxp] fetch "${key}" → ${exact.length} exact, ${related.length} related (${Math.round(performance.now() - t0)}ms)`)
-    return result
-  } catch (err) {
-    console.warn(`[shxp] fetch "${key}" failed (${Math.round(performance.now() - t0)}ms):`, err)
-    const empty = { exact: [], related: [] }
-    wordCache.set(key, empty)
-    return empty
-  }
+  const promise = (async () => {
+    try {
+      const res  = await fetch(`/api/shakespeare?q=${encodeURIComponent(queryKey)}`)
+      const data = await res.json()
+      const raw     = JSON.parse(data.parameters)
+      const results = Array.isArray(raw) ? raw : []
+      // Normalise apostrophes and British/American -our/-or spelling variants
+      // so "ill-favour'd" matches "ill-favored"
+      const norm    = s => s.toLowerCase().replace(/['\u2018\u2019]/g, '').replace(/our/g, 'or')
+      const normKey = norm(key)
+      const valid   = results.filter(r => r.Definition && !r.Headword.startsWith('Do you mean:'))
+      const exact   = valid.filter(r => norm(r.Headword) === normKey)
+      const related = valid.filter(r => norm(r.Headword) !== normKey && norm(r.Headword).startsWith(normKey))
+      const result  = { exact, related }
+      wordCache.set(key, result)
+      console.log(`[shxp] fetch "${key}" (queried "${queryKey}") → ${exact.length} exact, ${related.length} related (${Math.round(performance.now() - t0)}ms)`)
+      return result
+    } catch (err) {
+      console.warn(`[shxp] fetch "${key}" failed (${Math.round(performance.now() - t0)}ms):`, err)
+      const empty = { exact: [], related: [] }
+      wordCache.set(key, empty)
+      return empty
+    } finally {
+      inflightCache.delete(key)
+    }
+  })()
+
+  inflightCache.set(key, promise)
+  return promise
 }
 
 // Warm the shakespeareswords cache for a single word on hover intent.

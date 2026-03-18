@@ -55,7 +55,8 @@ export function WordSheet({ word, onClose }) {
       .then(results => {
         const ms = Math.round(performance.now() - t0)
         const total = results.direct.length + results.related.length
-        console.log(`[sheet] "${word.core}" — ${total} entries in ${ms}ms${total === 0 ? ' ⚠️ EMPTY' : ''}`)
+        const empty = total === 0 && !word.vce_note
+        console.log(`[sheet] "${word.core}" — ${total} entries in ${ms}ms${empty ? ' ⚠️ EMPTY' : ''}`)
         setEntries(results)
       })
       .catch(err => console.error(`[sheet] "${word.core}" lookup error:`, err))
