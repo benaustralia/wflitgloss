@@ -20,9 +20,20 @@ export default function GlossaryApp() {
   useEffect(() => { prewarmCommon() }, [])
 
   useEffect(() => {
+    const CACHE_KEY = 'shakelear-terms-cache'
+    const cached = localStorage.getItem(CACHE_KEY)
+    if (cached) {
+      try {
+        const terms = JSON.parse(cached)
+        update({ terms, tags: deriveTags(terms), loading: false })
+      } catch {}
+    }
     glossaryService.getAllTerms()
-      .then(terms => update({ terms, tags: deriveTags(terms), error: null, loading: false }))
-      .catch(err  => update({ error: err.message || 'Failed to load.', loading: false }))
+      .then(terms => {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(terms))
+        update({ terms, tags: deriveTags(terms), error: null, loading: false })
+      })
+      .catch(err => update(p => p.terms.length ? { ...p, loading: false } : { ...p, error: err.message || 'Failed to load.', loading: false }))
   }, [])
 
   useEffect(() => {

@@ -98,7 +98,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'firebase': ['firebase/firestore', 'firebase/app'],
           'lucide': ['lucide-react'],
           'ui': ['@/components/ui/input', '@/components/ui/button', '@/components/ui/textarea', '@/components/ui/scroll-area']
         }
