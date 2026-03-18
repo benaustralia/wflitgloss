@@ -49,9 +49,16 @@ export function WordSheet({ word, onClose }) {
     setEntries({ direct: [], related: [] })
     gsap.to(sheetRef.current,    { y: 0, duration: 0.42, ease: 'power3.out', overwrite: true })
     gsap.to(backdropRef.current, { opacity: 1, pointerEvents: 'auto', duration: 0.25, overwrite: true })
+    const t0 = performance.now()
+    console.debug(`[sheet] tap "${word.core}" — lookup start`)
     lookupShakespeare(word.forms?.[0] ?? word.core, word.vce_note ? null : word.original)
-      .then(results => setEntries(results))
-      .catch(() => {})
+      .then(results => {
+        const ms = Math.round(performance.now() - t0)
+        const total = results.direct.length + results.related.length
+        console.debug(`[sheet] "${word.core}" — ${total} entries in ${ms}ms${total === 0 ? ' ⚠️ EMPTY' : ''}`)
+        setEntries(results)
+      })
+      .catch(err => console.error(`[sheet] "${word.core}" lookup error:`, err))
   }, [word])
 
   // Escape key

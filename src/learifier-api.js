@@ -54,6 +54,7 @@ async function fetchFromShakespeare(key) {
   // Send the full word — API handles hyphens fine.
   // Strip apostrophes as they crash the server (send "favoured" not "favour'd")
   const queryKey = key.replace(/['\u2018\u2019\u02bc]/g, '')
+  const t0 = performance.now()
   try {
     const res = await fetch(`/api/shakespeare?q=${encodeURIComponent(queryKey)}`)
     const data = await res.json()
@@ -67,8 +68,10 @@ async function fetchFromShakespeare(key) {
     const related = valid.filter(r => norm(r.Headword) !== normKey && norm(r.Headword).startsWith(normKey))
     const result  = { exact, related }
     wordCache.set(key, result)
+    console.debug(`[shxp] fetch "${key}" → ${exact.length} exact, ${related.length} related (${Math.round(performance.now() - t0)}ms)`)
     return result
-  } catch {
+  } catch (err) {
+    console.warn(`[shxp] fetch "${key}" failed (${Math.round(performance.now() - t0)}ms):`, err)
     const empty = { exact: [], related: [] }
     wordCache.set(key, empty)
     return empty
@@ -105,6 +108,11 @@ export function warmWord(word) {
 export async function lookupShakespeare(word, originalWord = null) {
   const key     = word.toLowerCase()
   const origKey = originalWord ? originalWord.replace(/[^a-z']/gi, '').toLowerCase() : null
+  const t0      = performance.now()
+
+  const primaryCached  = wordCache.has(key)
+  const fallbackCached = origKey && origKey !== key ? wordCache.has(origKey) : null
+  console.debug(`[shxp] lookup "${key}"${origKey && origKey !== key ? ` + "${origKey}"` : ''} | cache: primary=${primaryCached}, fallback=${fallbackCached ?? 'n/a'}`)
 
   // Fire both fetches in parallel — origKey fallback is needed if exact is empty
   const [primary, fallback] = await Promise.all([
@@ -132,6 +140,7 @@ export async function lookupShakespeare(word, originalWord = null) {
     relatedEntries = [...related, ...fallback.exact, ...fallback.related]
   }
 
+  console.debug(`[shxp] lookup "${key}" done → ${direct.length} direct, ${relatedEntries.length} related (${Math.round(performance.now() - t0)}ms total)`)
   return { direct, related: relatedEntries }
 }
 
