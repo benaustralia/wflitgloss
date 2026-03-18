@@ -22,18 +22,9 @@ async function getDb() {
 
 export const glossaryService = {
   async getAllTerms() {
-    const { collection, getDocs, query, orderBy } = await import('firebase/firestore')
-    const db = await getDb()
-    const col = collection(db, 'terms')
-    try {
-      const snap = await getDocs(query(col, orderBy('createdAt', 'desc')))
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-    } catch (e) {
-      if (e.code !== 'failed-precondition') throw e
-      const snap = await getDocs(col)
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0) || b.id.localeCompare(a.id))
-    }
+    const res = await fetch('/api/terms')
+    if (!res.ok) throw new Error(`Failed to load terms: ${res.status}`)
+    return res.json()
   },
 
   async addTerm(data) {
