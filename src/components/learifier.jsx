@@ -36,7 +36,7 @@ export function TranslationPanel({ words, loading, onTap }) {
   useGSAP(() => {
     const all = gsap.utils.toArray('.word-token', containerRef.current)
     if (all.length > prevLen.current) {
-      gsap.set(all.slice(0, prevLen.current), { opacity: 1, y: 0, filter: 'blur(0px)' })
+      if (prevLen.current > 0) gsap.set(all.slice(0, prevLen.current), { opacity: 1, y: 0, filter: 'blur(0px)' })
       gsap.fromTo(
         all.slice(prevLen.current),
         { opacity: 0, y: 12, filter: 'blur(6px)' },
