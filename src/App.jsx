@@ -1,618 +1,344 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TranslationPanel, WordTokens, TranslationKey } from '@/components/learifier';
 import { WordSheet } from '@/components/word-sheet';
-import { translate, warmWord, prewarmCommon } from '@/learifier-api';
+import { translate, prewarmCommon } from '@/learifier-api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { Footer } from '@/components/footer';
 import { glossaryService } from '@/lib/glossaryService';
+import { cn } from '@/lib/utils';
 
-const debounce = (func, wait) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; };
+const debounce = (fn, wait) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait) } }
+const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+const isBlank = t => t && (!t.term?.trim()) && (!t.definition?.trim()) && (!t.ipa?.trim()) && (!t.tags?.length)
+const deriveTags = terms => [...new Set(terms.flatMap(t => t.tags || []))].sort()
 
 export default function GlossaryApp() {
-  const [translation, setTranslation] = useState({ words: [], loading: false, error: null, activeWord: null });
-  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', loading: true, error: null, localTerm: null, importJson: '', importStatus: '', fetchingIPA: false, flashId: null });
-  
-  // Create a ref that always points to the latest state to avoid stale closures in async handlers
+  const [trans, setTrans] = useState({ words: [], loading: false, error: null, activeWord: null });
+  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', loading: true, error: null, localTerm: null, importJson: '', importStatus: '', fetchingIPA: false, flashId: null, newTag: '' });
   const sRef = useRef(s);
-  useEffect(() => { sRef.current = s; }, [s]);
+  useEffect(() => { sRef.current = s }, [s]);
+  const update = u => setS(p => typeof u === 'function' ? u(p) : { ...p, ...u });
+  const pendingAddRef = useRef(null);
 
-  const update = (u) => setS(p => typeof u === 'function' ? u(p) : { ...p, ...u });
+  useEffect(() => { prewarmCommon() }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const allTerms = await glossaryService.getAllTerms();
+        update({ terms: allTerms, tags: deriveTags(allTerms), error: null, loading: false });
+      } catch (err) { update({ error: err.message || 'Failed to load data.', loading: false }) }
+    })()
+  }, []);
+
+  useEffect(() => {
+    const handler = async e => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('[data-state="open"]')) return;
+      e.preventDefault();
+      document.activeElement?.tagName !== 'BODY' && document.activeElement.blur();
+      const cur = sRef.current;
+      if (cur.view === 'detail') {
+        const term = cur.localTerm || cur.selected;
+        if (isBlank(term) && term?.id) {
+          update(p => ({ ...p, terms: p.terms.filter(t => t.id !== term.id), view: 'list', selected: null, localTerm: null }));
+          glossaryService.deleteTerm(term.id).catch(console.error);
+        } else {
+          update({ view: 'list', selected: null, localTerm: null });
+        }
+      }
+    };
+    document.addEventListener('keydown', handler, true);
+    return () => document.removeEventListener('keydown', handler, true);
+  }, []);
+
+  useEffect(() => {
+    if (!s.flashId) return;
+    const timer = setTimeout(() => update({ flashId: null }), 2000);
+    if (s.view === 'list') setTimeout(() => document.getElementById(`term-${s.flashId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+    return () => clearTimeout(timer);
+  }, [s.flashId, s.view]);
 
   const handleTranslate = async () => {
     const text = sRef.current.search.trim();
     if (!text) return;
-    setTranslation(t => ({ ...t, loading: true, error: null, words: [] }));
+    setTrans(t => ({ ...t, loading: true, error: null, words: [] }));
     try {
-      const result = await translate(text, (words) => {
-        setTranslation(t => ({ ...t, loading: false, words }));
-      });
-      if (!result?.length) { setTranslation(t => ({ ...t, loading: false })); return; }
-      // Skip save if nothing was actually translated
+      const result = await translate(text, words => setTrans(t => ({ ...t, loading: false, words })));
+      if (!result?.length) { setTrans(t => ({ ...t, loading: false })); return }
       if (result.every(w => w.type === 'untranslated')) return;
-      const elizabethan = result.map(w => w.display).join(' ');
-      const termData = {
-        term: elizabethan.charAt(0).toUpperCase() + elizabethan.slice(1),
-        definition: text.charAt(0).toUpperCase() + text.slice(1),
-        words: result,
-        ipa: '', tags: [],
-      };
+      const termData = { term: cap(result.map(w => w.display).join(' ')), definition: cap(text), words: result, ipa: '', tags: [] };
       glossaryService.addTerm(termData)
-        .then(termId => setS(prev => ({ ...prev, terms: [{ id: termId, ...termData }, ...prev.terms] })))
+        .then(id => setS(p => ({ ...p, terms: [{ id, ...termData }, ...p.terms] })))
         .catch(e => console.error('Auto-save failed:', e));
-    } catch (e) {
-      setTranslation(t => ({ ...t, error: e.message, loading: false }));
-    }
+    } catch (e) { setTrans(t => ({ ...t, error: e.message, loading: false })) }
   };
 
-  const updateSearch = (val) => {
-    update({ search: val });
-    setTranslation({ words: [], loading: false, error: null, activeWord: null });
-  };
-
-  const pendingAddRef = useRef(null);
-  useEffect(() => { prewarmCommon(); }, []);
-  useEffect(() => { (async () => { try { update({ loading: true, error: null }); const allTerms = await glossaryService.getAllTerms(); const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); update({ terms: allTerms, tags: allTags, error: null, loading: false }); } catch (err) { const errorMessage = err.message || 'Failed to load data. Please check Firebase configuration.'; console.error('Failed to load glossary data:', err); update({ error: errorMessage, loading: false }); } })(); }, []);
-  useEffect(() => { 
-    const handleEscape = async (e) => { 
-      if (e.key === 'Escape') {
-        if (document.querySelector('[data-state="open"]')) return;
-        e.preventDefault();
-        const currentState = sRef.current;
-        if (document.activeElement && document.activeElement.tagName !== 'BODY') { 
-          document.activeElement.blur(); 
-        } 
-        if (currentState.view === 'detail') { 
-          const term = currentState.localTerm || currentState.selected; 
-          const shouldDelete = term && term.id && (!term.term || term.term.trim() === '') && (!term.definition || term.definition.trim() === '') && (!term.ipa || term.ipa.trim() === '') && (!term.tags || term.tags.length === 0); 
-          if (shouldDelete && term.id) { 
-            update((prevState) => ({ ...prevState, terms: prevState.terms.filter(t => t.id !== term.id), view: 'list', selected: null, localTerm: null })); 
-            glossaryService.deleteTerm(term.id).catch(err => console.error('Failed to delete blank term:', err)); 
-          } else {
-            update({ view: 'list', selected: null, localTerm: null });
-          }
-        }
-      }
-    };
-    document.addEventListener('keydown', handleEscape, true); 
-    return () => document.removeEventListener('keydown', handleEscape, true); 
-  }, []); // Empty deps because we use sRef
-  useEffect(() => {
-    if (s.flashId) {
-      const timer = setTimeout(() => update({ flashId: null }), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [s.flashId]);
-  useEffect(() => {
-    if (s.flashId && s.view === 'list') {
-      // Small delay to ensure rendering is complete
-      setTimeout(() => {
-        const element = document.getElementById(`term-${s.flashId}`);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }, 100);
-    }
-  }, [s.flashId, s.view]);
-
-  // const debouncedSave = useCallback(debounce(async (field, value) => { if (!s.selected) return; try { await glossaryService.updateTerm(s.selected.id, { [field]: value }); update({ terms: s.terms.map(t => t.id === s.selected.id ? {...t, [field]: value} : t), selected: {...s.selected, [field]: value} }); if (field === 'tags') { const allTags = [...new Set(s.terms.flatMap(term => term.tags || []))].sort(); update({ tags: allTags }); } } catch (err) { update({ error: 'Failed to save. Please try again.' }); } }, 500), [s.selected, s.terms]);
+  const autoGenerateIPA = useCallback(debounce(async word => {
+    if (!word || (sRef.current.localTerm?.ipa?.trim())) return;
+    update({ fetchingIPA: true });
+    try {
+      const ipa = await glossaryService.getIPA(word);
+      update(p => {
+        if (p.localTerm?.term?.trim().toLowerCase() === word.toLowerCase() && !p.localTerm.ipa?.trim())
+          return { ...p, localTerm: { ...p.localTerm, ipa }, fetchingIPA: false };
+        return { ...p, fetchingIPA: false };
+      });
+    } catch { update({ fetchingIPA: false }) }
+  }, 1500), []);
 
   const h = {
     inputChange: (field, value) => {
-      // Use direct capitalization if field is term or definition
-      let processedValue = value;
-      if ((field === 'term' || field === 'definition') && value.length > 0) {
-        processedValue = value.charAt(0).toUpperCase() + value.slice(1);
-      }
-
-      update(prev => ({ 
-        ...prev, 
-        localTerm: { ...prev.localTerm, [field]: processedValue } 
-      }));
-      
-      if (field === 'term' && processedValue.trim().length > 2 && (!sRef.current.localTerm?.ipa || sRef.current.localTerm.ipa.trim() === '')) {
-        h.autoGenerateIPA(processedValue.trim());
-      }
+      const v = (field === 'term' || field === 'definition') ? cap(value) : value;
+      update(p => ({ ...p, localTerm: { ...p.localTerm, [field]: v } }));
+      if (field === 'term' && v.trim().length > 2 && !sRef.current.localTerm?.ipa?.trim()) autoGenerateIPA(v.trim());
     },
-    autoGenerateIPA: useCallback(debounce(async (word) => {
-      if (!word) return;
-      
-      // Check if IPA is already filled to avoid overwriting user input
-      if (sRef.current.localTerm?.ipa && sRef.current.localTerm.ipa.trim() !== '') {
-        console.log('IPA already exists, skipping auto-generation');
-        return;
-      }
-
-      update({ fetchingIPA: true });
-      try {
-        const ipa = await glossaryService.getIPA(word);
-        if (ipa) {
-          update(prev => {
-            // Only update if the term still matches AND IPA is still empty
-            if (prev.localTerm?.term?.trim().toLowerCase() === word.toLowerCase() && (!prev.localTerm.ipa || prev.localTerm.ipa.trim() === '')) {
-              return { ...prev, localTerm: { ...prev.localTerm, ipa }, fetchingIPA: false };
-            }
-            return { ...prev, fetchingIPA: false };
-          });
-        } else {
-          update({ fetchingIPA: false });
-        }
-      } catch (err) {
-        console.error('Auto-IPA generation failed:', err);
-        update({ fetchingIPA: false });
-      }
-    }, 1500), []),
     save: async () => {
       update({ loading: true });
-      
-      // Use a self-executing async function to handle the logic
       (async () => {
         try {
-          // Get the latest state from the ref
-          const currentState = sRef.current;
-          
-          if (!currentState || !currentState.selected) {
-            console.warn('Save called but no term selected in sRef');
-            update({ loading: false });
-            return;
-          }
-
-          const selectedId = currentState.selected.id;
-          console.log('Starting save for ID:', selectedId);
-          
-          // Auto-add pending tag if user typed it but didn't click Add
-          let termToSave = { ...currentState.localTerm };
-
-          // Auto-capitalize first letter of term and definition
-          if (termToSave.term && termToSave.term.trim()) {
-            const trimmed = termToSave.term.trim();
-            termToSave.term = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-          }
-          if (termToSave.definition && termToSave.definition.trim()) {
-            const trimmed = termToSave.definition.trim();
-            termToSave.definition = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-          }
-
-          if (currentState.newTag && currentState.newTag.trim()) {
-            const tagToAdd = currentState.newTag.trim();
-            if (!termToSave.tags?.includes(tagToAdd)) {
-              termToSave.tags = [...(termToSave.tags || []), tagToAdd];
-              console.log('Auto-adding pending tag:', tagToAdd);
-            }
-          }
-
-          // Auto-wrap IPA with slashes if missing
-          if (termToSave.ipa && termToSave.ipa.trim()) {
-            let ipa = termToSave.ipa.trim();
+          const cur = sRef.current;
+          if (!cur?.selected) { update({ loading: false }); return }
+          let data = { ...cur.localTerm };
+          if (data.term?.trim()) data.term = cap(data.term.trim());
+          if (data.definition?.trim()) data.definition = cap(data.definition.trim());
+          if (cur.newTag?.trim() && !data.tags?.includes(cur.newTag.trim()))
+            data.tags = [...(data.tags || []), cur.newTag.trim()];
+          if (data.ipa?.trim()) {
+            let ipa = data.ipa.trim();
             if (!ipa.startsWith('/')) ipa = '/' + ipa;
-            if (!ipa.endsWith('/')) ipa = ipa + '/';
-            termToSave.ipa = ipa;
+            if (!ipa.endsWith('/')) ipa += '/';
+            data.ipa = ipa;
           }
-
-          // If there's a pending add, wait for it to complete
-          let actualId = selectedId;
-          if (pendingAddRef.current) {
-            console.log('Waiting for pending add to complete...');
-            const resolvedId = await pendingAddRef.current;
-            if (resolvedId) {
-              actualId = resolvedId;
-              console.log('Pending add resolved to real ID:', actualId);
-            }
-          }
-
-          if (!actualId) {
-             console.error('Cannot save: no actualId found');
-             throw new Error("No valid Firestore ID found for term");
-          }
-
-          // Strip ID before saving to Firestore
-          const { id: _, ...dataToSave } = termToSave;
-          console.log('Saving to Firestore:', actualId, dataToSave);
-          await glossaryService.updateTerm(actualId, dataToSave);
-          
-          update(current => {
-            // Find the term in the list. It might still have the temp ID if the 'add' update hasn't run yet.
-            const updatedTerms = current.terms.map(t => 
-              (t.id === actualId || t.id === selectedId) ? { ...t, ...dataToSave, id: actualId } : t
-            );
-            
-            const allTags = [...new Set(updatedTerms.flatMap(term => term.tags || []))].sort();
-
-            console.log('State update after save successful');
-            return {
-              ...current,
-              terms: updatedTerms,
-              selected: null,
-              localTerm: null,
-              view: 'list',
-              loading: false,
-              flashId: actualId,
-              tags: allTags,
-              newTag: ''
-            };
+          let actualId = cur.selected.id;
+          if (pendingAddRef.current) actualId = (await pendingAddRef.current) || actualId;
+          const { id: _, ...payload } = data;
+          await glossaryService.updateTerm(actualId, payload);
+          update(p => {
+            const terms = p.terms.map(t => (t.id === actualId || t.id === cur.selected.id) ? { ...t, ...payload, id: actualId } : t);
+            return { ...p, terms, selected: null, localTerm: null, view: 'list', loading: false, flashId: actualId, tags: deriveTags(terms), newTag: '' };
           });
           toast.success('Saved successfully');
-        } catch (err) {
-          console.error('Save failed error details:', err);
-          update({ loading: false });
-          toast.error(err.message || 'Failed to save');
-        }
+        } catch (err) { update({ loading: false }); toast.error(err.message || 'Failed to save') }
       })();
     },
     add: async (searchTerm = '') => {
-      const initialTerm = searchTerm ? searchTerm.charAt(0).toUpperCase() + searchTerm.slice(1) : '';
       const tempId = Date.now().toString();
-      const termData = { term: initialTerm, definition: "", ipa: "", tags: [] };
+      const termData = { term: cap(searchTerm), definition: '', ipa: '', tags: [] };
       const newTerm = { id: tempId, ...termData };
-
-      update(prev => ({
-        ...prev,
-        terms: [newTerm, ...prev.terms],
-        selected: newTerm,
-        localTerm: newTerm,
-        view: 'detail',
-        search: searchTerm ? '' : prev.search
-      }));
-
-      if (initialTerm.length > 2) {
-        h.autoGenerateIPA(initialTerm);
-      }
-
+      update(p => ({ ...p, terms: [newTerm, ...p.terms], selected: newTerm, localTerm: newTerm, view: 'detail', search: searchTerm ? '' : p.search }));
+      if (termData.term.length > 2) autoGenerateIPA(termData.term);
       pendingAddRef.current = (async () => {
         try {
-          const termId = await glossaryService.addTerm(termData);
-          update(prev => ({
-            ...prev,
-            terms: prev.terms.map(t => t.id === tempId ? { ...t, id: termId } : t),
-            selected: prev.selected?.id === tempId ? { ...prev.selected, id: termId } : prev.selected,
-            localTerm: prev.localTerm?.id === tempId ? { ...prev.localTerm, id: termId } : prev.localTerm
-          }));
+          const id = await glossaryService.addTerm(termData);
+          update(p => ({ ...p, terms: p.terms.map(t => t.id === tempId ? { ...t, id } : t), selected: p.selected?.id === tempId ? { ...p.selected, id } : p.selected, localTerm: p.localTerm?.id === tempId ? { ...p.localTerm, id } : p.localTerm }));
           pendingAddRef.current = null;
-          return termId;
-        } catch (err) {
-          update(prev => ({
-            ...prev,
-            error: 'Failed to add term. Please try again.',
-            terms: prev.terms.filter(t => t.id !== tempId),
-            view: 'list',
-            selected: null,
-            localTerm: null
-          }));
+          return id;
+        } catch {
+          update(p => ({ ...p, terms: p.terms.filter(t => t.id !== tempId), view: 'list', selected: null, localTerm: null, error: 'Failed to add term.' }));
           pendingAddRef.current = null;
           return null;
         }
       })();
     },
-    deleteTerm: async (termId) => { 
-      try { 
-        await glossaryService.deleteTerm(termId); 
-        update(prev => {
-          const newTerms = prev.terms.filter(t => t.id !== termId); 
-          const allTags = [...new Set(newTerms.flatMap(term => term.tags || []))].sort(); 
-          return { ...prev, terms: newTerms, tags: allTags, view: 'list', selected: null, localTerm: null };
-        });
-      } catch (err) { 
-        update({ error: 'Failed to delete term. Please try again.' }); 
-      } 
+    deleteTerm: async id => {
+      try {
+        await glossaryService.deleteTerm(id);
+        update(p => { const terms = p.terms.filter(t => t.id !== id); return { ...p, terms, tags: deriveTags(terms), view: 'list', selected: null, localTerm: null } });
+      } catch { update({ error: 'Failed to delete term.' }) }
     },
     goBack: async () => {
-      const currentState = sRef.current;
-      const term = currentState.localTerm || currentState.selected;
-      const isBlank = term && term.id && (!term.term || term.term.trim() === '') && (!term.definition || term.definition.trim() === '') && (!term.ipa || term.ipa.trim() === '') && (!term.tags || term.tags.length === 0);
-
-      if (isBlank && term?.id) {
-        update(prev => ({ ...prev, terms: prev.terms.filter(t => t.id !== term.id), view: 'list', selected: null, localTerm: null }));
-        glossaryService.deleteTerm(term.id).catch(err => console.error('Failed to delete blank term:', err));
-      } else if (term?.id) {
-        await h.save();
-      } else {
-        update({ view: 'list', selected: null, localTerm: null });
-      }
+      const cur = sRef.current;
+      const term = cur.localTerm || cur.selected;
+      if (isBlank(term) && term?.id) {
+        update(p => ({ ...p, terms: p.terms.filter(t => t.id !== term.id), view: 'list', selected: null, localTerm: null }));
+        glossaryService.deleteTerm(term.id).catch(console.error);
+      } else if (term?.id) { await h.save() }
+      else { update({ view: 'list', selected: null, localTerm: null }) }
     },
     exportTerms: () => {
-      const currentState = sRef.current;
-      const exportData = currentState.terms.map(({ id, ...term }) => term); 
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' }); 
-      const url = URL.createObjectURL(blob); 
-      const a = document.createElement('a'); 
-      a.href = url; 
-      a.download = `shakelear-export-${new Date().toISOString().split('T')[0]}.json`; 
-      document.body.appendChild(a); 
-      a.click(); 
-      document.body.removeChild(a); 
-      URL.revokeObjectURL(url); 
-      toast.success('Exported successfully'); 
+      const data = sRef.current.terms.map(({ id, ...t }) => t);
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })), download: `shakelear-export-${new Date().toISOString().split('T')[0]}.json` });
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      toast.success('Exported successfully');
     },
     importTerms: async () => {
       try {
         update({ importStatus: 'Importing...' });
-        const currentState = sRef.current;
-        const terms = JSON.parse(currentState.importJson); 
-        let success = 0; 
-        for (const term of terms) { 
-          // If IPA is missing, try to fetch it
-          if (!term.ipa || term.ipa.trim() === '') {
-            try {
-              const fetchedIpa = await glossaryService.getIPA(term.term);
-              if (fetchedIpa) term.ipa = fetchedIpa;
-            } catch (ipaErr) {
-              console.warn(`Failed to fetch IPA for ${term.term}:`, ipaErr);
-            }
-          }
-          await glossaryService.addTerm({
-            ...term,
-            term: term.term.charAt(0).toUpperCase() + term.term.slice(1),
-            definition: term.definition ? term.definition.charAt(0).toUpperCase() + term.definition.slice(1) : ''
-          }); 
-          success++; 
-          update({ importStatus: `✅ Imported ${success}/${terms.length}` });
-        } 
-        toast.success(`Imported ${success} terms successfully`); 
-        update({ importStatus: '', importJson: '' }); 
-        const allTerms = await glossaryService.getAllTerms(); 
-        const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); 
-        update({ terms: allTerms, tags: allTags }); 
-      } catch (err) { 
-        update({ importStatus: `Import failed: ${err.message}` }); 
-        toast.error(err.message); 
-      } 
+        const terms = JSON.parse(sRef.current.importJson);
+        let success = 0;
+        for (const term of terms) {
+          if (!term.ipa?.trim()) { try { const ipa = await glossaryService.getIPA(term.term); if (ipa) term.ipa = ipa } catch {} }
+          await glossaryService.addTerm({ ...term, term: cap(term.term), definition: cap(term.definition || '') });
+          update({ importStatus: `✅ Imported ${++success}/${terms.length}` });
+        }
+        toast.success(`Imported ${success} terms successfully`);
+        update({ importStatus: '', importJson: '' });
+        const allTerms = await glossaryService.getAllTerms();
+        update({ terms: allTerms, tags: deriveTags(allTerms) });
+      } catch (err) { update({ importStatus: `Import failed: ${err.message}` }); toast.error(err.message) }
     },
     cleanupBlankEntries: async () => {
       try {
         update({ importStatus: 'Cleaning up blank entries...' });
-        const currentState = sRef.current;
-        const blankTerms = currentState.terms.filter(term => !term.term || term.term.trim() === '' || term.term === 'Untitled'); 
-        let deleted = 0; 
-        for (const term of blankTerms) { 
-          await glossaryService.deleteTerm(term.id); 
-          deleted++; 
-        } 
-        update({ importStatus: `✅ Cleaned up ${deleted} blank entries!` }); 
-        const allTerms = await glossaryService.getAllTerms(); 
-        const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); 
-        update({ terms: allTerms, tags: allTags }); 
-      } catch (err) { 
-        update({ importStatus: `❌ Cleanup failed: ${err.message}` }); 
-      } 
+        const blanks = sRef.current.terms.filter(t => !t.term?.trim() || t.term === 'Untitled');
+        for (const t of blanks) await glossaryService.deleteTerm(t.id);
+        update({ importStatus: `✅ Cleaned up ${blanks.length} blank entries!` });
+        const allTerms = await glossaryService.getAllTerms();
+        update({ terms: allTerms, tags: deriveTags(allTerms) });
+      } catch (err) { update({ importStatus: `❌ Cleanup failed: ${err.message}` }) }
     },
     clearAllEntries: async () => {
       try {
         update({ importStatus: 'Clearing all entries...' });
-        const currentState = sRef.current;
-        let deleted = 0;
-        for (const term of currentState.terms) {
-          await glossaryService.deleteTerm(term.id);
-          deleted++;
-        }
-        update({ importStatus: `✅ Cleared ${deleted} entries!`, terms: [] });
-      } catch (err) {
-        update({ importStatus: `❌ Clear failed: ${err.message}` });
-      }
+        for (const t of sRef.current.terms) await glossaryService.deleteTerm(t.id);
+        update({ importStatus: `✅ Cleared entries!`, terms: [] });
+      } catch (err) { update({ importStatus: `❌ Clear failed: ${err.message}` }) }
     },
     capitalizeAllEntries: async () => {
       try {
         update({ importStatus: 'Capitalizing all entries...' });
-        const currentState = sRef.current;
         let count = 0;
-        for (const term of currentState.terms) {
-          let updated = false;
+        for (const term of sRef.current.terms) {
           const updates = {};
-          
-          if (term.term && term.term.trim()) {
-            const trimmed = term.term.trim();
-            const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-            if (capitalized !== term.term) {
-              updates.term = capitalized;
-              updated = true;
-            }
-          }
-          
-          if (term.definition && term.definition.trim()) {
-            const trimmed = term.definition.trim();
-            const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-            if (capitalized !== term.definition) {
-              updates.definition = capitalized;
-              updated = true;
-            }
-          }
-
-          if (updated) {
-            await glossaryService.updateTerm(term.id, updates);
-            count++;
-          }
+          if (term.term?.trim()) { const c = cap(term.term.trim()); if (c !== term.term) updates.term = c }
+          if (term.definition?.trim()) { const c = cap(term.definition.trim()); if (c !== term.definition) updates.definition = c }
+          if (Object.keys(updates).length) { await glossaryService.updateTerm(term.id, updates); count++ }
         }
         update({ importStatus: `✅ Capitalized ${count} entries!` });
         const allTerms = await glossaryService.getAllTerms();
         update({ terms: allTerms });
-      } catch (err) {
-        update({ importStatus: `❌ Capitalization failed: ${err.message}` });
-      }
-    }
+      } catch (err) { update({ importStatus: `❌ Capitalization failed: ${err.message}` }) }
+    },
   };
 
-  const getSortedTerms = () =>
-    (s.terms || []).slice().sort((a, b) => (a.term || '').localeCompare(b.term || '', undefined, { sensitivity: 'base' }));
-
-  const matchedTermId = s.search.trim()
-    ? (s.terms.find(t =>
-        (t.term || '').toLowerCase().includes(s.search.toLowerCase()) ||
-        (t.definition || '').toLowerCase().includes(s.search.toLowerCase())
-      )?.id ?? null)
-    : null;
+  const sortedTerms = [...(s.terms || [])].sort((a, b) => (a.term || '').localeCompare(b.term || '', undefined, { sensitivity: 'base' }));
+  const matchedTermId = s.search.trim() ? (s.terms.find(t => (t.term || '').toLowerCase().includes(s.search.toLowerCase()) || (t.definition || '').toLowerCase().includes(s.search.toLowerCase()))?.id ?? null) : null;
 
   useEffect(() => {
-    if (matchedTermId) {
-      const el = document.getElementById(`term-${matchedTermId}`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    matchedTermId && document.getElementById(`term-${matchedTermId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [matchedTermId]);
 
-  const showGoButton = s.search.trim() && !matchedTermId && !translation.loading && !translation.words.length;
+  const showGoButton = s.search.trim() && !matchedTermId && !trans.loading && !trans.words.length;
 
-  if (s.loading) return <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div><p className="text-muted-foreground">Loading glossary...</p></div></div>;
-  if (s.error) return <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex items-center justify-center p-4"><div className="text-center"><div className="text-destructive mb-4">⚠️</div><p className="text-destructive mb-4">{s.error}</p><Button onClick={() => window.location.reload()}>Try Again</Button></div></div>;
-
-  return <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex flex-col">
-    <Toaster />
-    <div className="flex-none px-4 pt-8 pb-0 text-center">
-      <div className="flex items-center justify-center">
-        <h1 className="text-5xl font-bold text-primary animate-in fade-in slide-in-from-bottom-4 duration-1000">Shake-o-Lingo</h1>
-      </div>
-      <h2 className="text-xl text-muted-foreground mt-2 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">Learn Shakespeare's English</h2>
+  if (s.loading) return (
+    <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" /><p className="text-muted-foreground">Loading glossary...</p></div>
     </div>
-    {(s.view === 'list' ? <div className="flex flex-col flex-1 w-full">
-        {/* Search bar */}
-        <div className="flex gap-2 items-center px-4 pt-4 pb-2">
-          <div className="relative flex-1">
-            <Input
-              placeholder="Type anything in modern English..."
-              value={s.search}
-              onChange={(e) => updateSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && showGoButton && handleTranslate()}
-              className="w-full h-10 text-sm"
-            />
-          </div>
-          {showGoButton && (
-            <Button
-              size="icon"
-              onClick={handleTranslate}
-              aria-label="Translate to Shakespearean"
-              className="shrink-0 bg-transparent border border-violet-500 text-violet-500 hover:bg-violet-500/10 hover:border-violet-400 ring-2 ring-violet-500/30 animate-pulse"
-            >
-              <Sparkles className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+  );
+  if (s.error) return (
+    <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="text-center"><div className="text-destructive mb-4">⚠️</div><p className="text-destructive mb-4">{s.error}</p><Button onClick={() => window.location.reload()}>Try Again</Button></div>
+    </div>
+  );
 
-        <TranslationKey />
+  return (
+    <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex flex-col">
+      <Toaster />
+      <div className="flex-none px-4 pt-8 pb-0 text-center">
+        <h1 className="text-5xl font-bold text-primary animate-in fade-in slide-in-from-bottom-4 duration-1000">Shake-o-Lingo</h1>
+        <h2 className="text-xl text-muted-foreground mt-2 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">Learn Shakespeare's English</h2>
+      </div>
 
-        {/* Auto-translation panel — appears immediately below search when active */}
-        {(translation.loading || translation.words.length > 0 || translation.error) && s.search.trim() && (
-          <div className="px-4 pb-4 border-b border-border">
-            {translation.loading && (
-              <p className="text-muted-foreground text-sm italic animate-pulse py-4">Translating…</p>
-            )}
-            {translation.error && (
-              <Alert variant="destructive" className="mt-2">
-                <AlertDescription>{translation.error}</AlertDescription>
-              </Alert>
-            )}
-            {translation.words.length > 0 && (
-              <TranslationPanel
-                words={translation.words}
-                loading={false}
-                onTap={(word) => setTranslation(t => ({ ...t, activeWord: word }))}
-              />
+      {s.view === 'list' ? (
+        <div className="flex flex-col flex-1 w-full">
+          <div className="flex gap-2 items-center px-4 pt-4 pb-2">
+            <Input placeholder="Type anything in modern English..." value={s.search}
+              onChange={e => { update({ search: e.target.value }); setTrans({ words: [], loading: false, error: null, activeWord: null }) }}
+              onKeyDown={e => e.key === 'Enter' && showGoButton && handleTranslate()}
+              className="w-full h-10 text-sm" />
+            {showGoButton && (
+              <Button size="icon" onClick={handleTranslate} aria-label="Translate to Shakespearean"
+                className="shrink-0 bg-transparent border border-violet-500 text-violet-500 hover:bg-violet-500/10 hover:border-violet-400 ring-2 ring-violet-500/30 animate-pulse">
+                <Sparkles className="h-4 w-4" />
+              </Button>
             )}
           </div>
-        )}
 
-        {/* Term list */}
-        <div className="flex-1 relative">
-          <ScrollArea className="h-full">
-            <div className="divide-y divide-border">
-              {getSortedTerms().map(term => (
-                <div
-                  key={term.id}
-                  id={`term-${term.id}`}
-                  className={`p-4 flex flex-col gap-2 transition-all duration-700 ${matchedTermId === term.id ? 'bg-violet-500/15' : s.flashId === term.id ? 'bg-violet-500/15' : ''}`}
-                >
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {term.words
-                      ? <WordTokens words={term.words} onTap={(word) => setTranslation(t => ({ ...t, activeWord: word }))} />
-                      : <div className="font-medium text-base text-foreground break-words">{term.term || 'Untitled'}</div>
-                    }
-                    {term.ipa && <div className="text-sm text-muted-foreground font-mono">{term.ipa}</div>}
-                  </div>
-                  {term.definition && (
-                    <div className="text-sm text-muted-foreground line-clamp-2 break-words">{term.definition}</div>
-                  )}
-                </div>
-              ))}
-              {getSortedTerms().length === 0 && (
-                <div className="p-8 text-center text-muted-foreground">No terms yet</div>
-              )}
+          <TranslationKey />
+
+          {(trans.loading || trans.words.length > 0 || trans.error) && s.search.trim() && (
+            <div className="px-4 pb-4 border-b border-border">
+              {trans.loading && <p className="text-muted-foreground text-sm italic animate-pulse py-4">Translating…</p>}
+              {trans.error && <Alert variant="destructive" className="mt-2"><AlertDescription>{trans.error}</AlertDescription></Alert>}
+              {trans.words.length > 0 && <TranslationPanel words={trans.words} loading={false} onTap={word => setTrans(t => ({ ...t, activeWord: word }))} />}
             </div>
-          </ScrollArea>
-          <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none"></div>
-        </div>
-        <WordSheet word={translation.activeWord} onClose={() => setTranslation(t => ({ ...t, activeWord: null }))} />
-        <Footer onClearAll={s.terms.length > 0 ? () => { if (window.confirm(`Delete all ${s.terms.length} entries?`)) h.clearAllEntries(); } : null} />
-      </div> : <div className="flex flex-col w-full">
-      <div className="flex-none p-4 border-b border-border bg-background flex items-center sticky top-0 z-10">
-        <div className="flex-1">
-          <Button variant="ghost" onClick={h.goBack}><ArrowLeft />Back</Button>
-        </div>
-        <span className="text-lg font-medium truncate max-w-xs text-center">{s.localTerm?.term || 'New Shakespearean Phrase'}</span>
-        <div className="flex-1"></div>
-      </div>
-      {/* Constrain form width for better readability on large screens */}
-      <div className="p-4 space-y-4 w-full max-w-xl mx-auto">
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <Input placeholder="Shakespearean phrase" value={s.localTerm?.term || ''} onChange={(e) => h.inputChange('term', e.target.value)} className="flex-1 h-12 text-lg font-medium" />
+          )}
+
+          <div className="flex-1 relative">
+            <ScrollArea className="h-full">
+              <div className="divide-y divide-border">
+                {sortedTerms.map(term => (
+                  <div key={term.id} id={`term-${term.id}`}
+                    className={cn('p-4 flex flex-col gap-2 transition-all duration-700', (matchedTermId === term.id || s.flashId === term.id) && 'bg-violet-500/15')}>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {term.words
+                        ? <WordTokens words={term.words} onTap={word => setTrans(t => ({ ...t, activeWord: word }))} />
+                        : <div className="font-medium text-base text-foreground break-words">{term.term || 'Untitled'}</div>}
+                      {term.ipa && <div className="text-sm text-muted-foreground font-mono">{term.ipa}</div>}
+                    </div>
+                    {term.definition && <div className="text-sm text-muted-foreground line-clamp-2 break-words">{term.definition}</div>}
+                  </div>
+                ))}
+                {sortedTerms.length === 0 && <div className="p-8 text-center text-muted-foreground">No terms yet</div>}
+              </div>
+            </ScrollArea>
+            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none" />
           </div>
+          <WordSheet word={trans.activeWord} onClose={() => setTrans(t => ({ ...t, activeWord: null }))} />
+          <Footer onClearAll={s.terms.length > 0 ? () => { if (window.confirm(`Delete all ${s.terms.length} entries?`)) h.clearAllEntries() } : null} />
         </div>
-        <div className="relative">
-          <Input 
-            placeholder={s.fetchingIPA ? "Fetching pronunciation..." : "IPA"} 
-            value={s.localTerm?.ipa || ''} 
-            onChange={(e) => h.inputChange('ipa', e.target.value)} 
-            className={`w-full h-12 text-base font-mono pr-10 ${s.fetchingIPA ? 'animate-pulse text-muted-foreground' : ''}`} 
-          />
-          <Button
-            size="icon"
-            variant="ghost"
-            className={`absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary ${s.fetchingIPA ? 'animate-spin' : ''}`}
-            onClick={() => sRef.current.localTerm?.term && h.autoGenerateIPA(sRef.current.localTerm.term.trim())}
-            disabled={s.fetchingIPA}
-          >
-            <Sparkles />
-          </Button>
+      ) : (
+        <div className="flex flex-col w-full">
+          <div className="flex-none p-4 border-b border-border bg-background flex items-center sticky top-0 z-10">
+            <div className="flex-1"><Button variant="ghost" onClick={h.goBack}><ArrowLeft />Back</Button></div>
+            <span className="text-lg font-medium truncate max-w-xs text-center">{s.localTerm?.term || 'New Shakespearean Phrase'}</span>
+            <div className="flex-1" />
+          </div>
+          <div className="p-4 space-y-4 w-full max-w-xl mx-auto">
+            <Input placeholder="Shakespearean phrase" value={s.localTerm?.term || ''} onChange={e => h.inputChange('term', e.target.value)} className="h-12 text-lg font-medium" />
+            <div className="relative">
+              <Input placeholder={s.fetchingIPA ? 'Fetching pronunciation...' : 'IPA'}
+                value={s.localTerm?.ipa || ''} onChange={e => h.inputChange('ipa', e.target.value)}
+                className={cn('w-full h-12 text-base font-mono pr-10', s.fetchingIPA && 'animate-pulse text-muted-foreground')} />
+              <Button size="icon" variant="ghost" disabled={s.fetchingIPA}
+                className={cn('absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary', s.fetchingIPA && 'animate-spin')}
+                onClick={() => sRef.current.localTerm?.term && autoGenerateIPA(sRef.current.localTerm.term.trim())}>
+                <Sparkles />
+              </Button>
+            </div>
+            <Textarea placeholder="Modern English phrase" value={s.localTerm?.definition || ''}
+              onChange={e => h.inputChange('definition', e.target.value)} className="w-full min-h-40 text-base resize-none" rows={10} />
+          </div>
+          <div className="flex-none p-4 border-t border-border bg-background">
+            <div className="flex justify-end gap-2 w-full max-w-xl mx-auto">
+              <AlertDialog>
+                <AlertDialogTrigger asChild><Button variant="destructive">Delete</Button></AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                    <AlertDialogDescription>This will permanently delete "{s.localTerm?.term || 'Untitled'}".</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => h.deleteTerm(s.selected.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button onClick={h.save} disabled={s.loading}>Save</Button>
+            </div>
+          </div>
+          <Footer />
         </div>
-        <Textarea placeholder="Modern English phrase" value={s.localTerm?.definition || ''} onChange={(e) => h.inputChange('definition', e.target.value)} className="w-full min-h-40 text-base resize-none" rows={10} />
-      </div>
-      <div className="flex-none p-4 border-t border-border bg-background">
-        <div className="flex justify-end gap-2 w-full max-w-xl mx-auto">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">Delete</Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the term
-                  "{s.localTerm?.term || 'Untitled'}".
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { h.deleteTerm(s.selected.id); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <Button onClick={h.save} disabled={s.loading}>Save</Button>
-        </div>
-      </div>
-      <Footer />
-    </div>)}
-  </div>;
+      )}
+    </div>
+  );
 }

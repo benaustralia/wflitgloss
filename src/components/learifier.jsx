@@ -2,19 +2,18 @@ import { useRef } from 'react'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { warmWord } from '@/learifier-api'
+import { cn } from '@/lib/utils'
 
 function WordToken({ word, onTap }) {
-  const cls = [
-    'word-token inline-block mr-[0.3em] my-1',
-    (word.type === 'essential' || word.type === 'translated') && 'text-violet-500 cursor-pointer hover:text-violet-500/70',
-    word.type === 'untranslated' && 'text-muted-foreground/40',
-    word.isMadness               && 'madness-word',
-  ].filter(Boolean).join(' ')
-
   const tappable = word.type === 'essential' || word.type === 'translated'
   return (
     <span
-      className={cls}
+      className={cn(
+        'word-token inline-block mr-[0.3em] my-1',
+        tappable && 'text-violet-500 cursor-pointer hover:text-violet-500/70',
+        word.type === 'untranslated' && 'text-muted-foreground/40',
+        word.isMadness && 'madness-word',
+      )}
       onMouseEnter={tappable ? () => warmWord(word) : undefined}
       onClick={tappable ? () => onTap(word) : undefined}
     >
@@ -29,10 +28,10 @@ export function TranslationKey() {
   return (
     <div className="flex items-center gap-5 px-4 py-2">
       <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-violet-500">
-        <span className={`${DOT} bg-violet-500`} /> translated
+        <span className={cn(DOT, 'bg-violet-500')} /> translated
       </span>
       <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground/40">
-        <span className={`${DOT} bg-muted-foreground/40`} /> unchanged
+        <span className={cn(DOT, 'bg-muted-foreground/40')} /> unchanged
       </span>
     </div>
   )
@@ -55,26 +54,18 @@ export function TranslationPanel({ words, loading, onTap }) {
     const all = gsap.utils.toArray('.word-token', containerRef.current)
     if (all.length > prevLen.current) {
       if (prevLen.current > 0) gsap.set(all.slice(0, prevLen.current), { opacity: 1, y: 0, filter: 'blur(0px)' })
-      gsap.fromTo(
-        all.slice(prevLen.current),
+      gsap.fromTo(all.slice(prevLen.current),
         { opacity: 0, y: 12, filter: 'blur(6px)' },
-        { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.45, stagger: 0.02, ease: 'power2.out' }
-      )
-    } else {
-      if (all.length) gsap.set(all, { opacity: 1, y: 0, filter: 'blur(0px)' })
+        { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.45, stagger: 0.02, ease: 'power2.out' })
+    } else if (all.length) {
+      gsap.set(all, { opacity: 1, y: 0, filter: 'blur(0px)' })
     }
     prevLen.current = all.length
     const madness = gsap.utils.toArray('.madness-word', containerRef.current)
-    if (madness.length) gsap.to(madness, {
-      x: 'random(-2.5, 2.5)', rotation: 'random(-2, 2)',
-      duration: 0.18, repeat: -1, repeatRefresh: true,
-    })
+    if (madness.length) gsap.to(madness, { x: 'random(-2.5, 2.5)', rotation: 'random(-2, 2)', duration: 0.18, repeat: -1, repeatRefresh: true })
   }, { scope: containerRef, dependencies: [words], revertOnUpdate: true })
 
-  if (loading) return (
-    <p className="px-4 py-6 text-muted-foreground text-sm italic animate-pulse">Translating…</p>
-  )
-
+  if (loading) return <p className="px-4 py-6 text-muted-foreground text-sm italic animate-pulse">Translating…</p>
   if (!words.length) return null
 
   return (
