@@ -43,10 +43,11 @@ export function TranslationPanel({ words, loading, onTap }) {
         { opacity: 1, y: 0, filter: 'blur(0px)', duration: 0.45, stagger: 0.02, ease: 'power2.out' }
       )
     } else {
-      gsap.set(all, { opacity: 1, y: 0, filter: 'blur(0px)' })
+      if (all.length) gsap.set(all, { opacity: 1, y: 0, filter: 'blur(0px)' })
     }
     prevLen.current = all.length
-    gsap.to('.madness-word', {
+    const madness = gsap.utils.toArray('.madness-word', containerRef.current)
+    if (madness.length) gsap.to(madness, {
       x: 'random(-2.5, 2.5)', rotation: 'random(-2, 2)',
       duration: 0.18, repeat: -1, repeatRefresh: true,
     })
