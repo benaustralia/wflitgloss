@@ -1,6 +1,7 @@
 import { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react'
 import gsap from 'gsap'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ExternalLink, X } from 'lucide-react'
 import { lookupShakespeare } from '@/learifier-api'
 
@@ -116,21 +117,18 @@ export function WordSheet({ word, onClose }) {
 
         {shown && (
           <div className="overflow-y-auto px-6 pt-5 pb-10">
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-amber-500 mb-2">
-              {shown.type === 'essential' ? 'Essential Word' : 'Elizabethan Word'}
+            <p className="text-xs font-mono uppercase tracking-[0.2em] text-violet-500 mb-2">
+              Elizabethan Word
             </p>
-            <h2 className={`text-4xl font-bold mb-5 ${shown.type === 'essential' ? 'text-amber-500' : 'text-foreground'}`}>
+            <h2 className="text-4xl font-bold mb-5 text-foreground">
               {shown.forms?.[0] ?? shown.core}
             </h2>
 
-            {shown.vce_note && (
-              <div className="border-l-2 border-primary/30 pl-4 mb-6">
-                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                  VCE Note
-                </p>
-                <p className="text-base leading-relaxed text-muted-foreground italic">
-                  {shown.vce_note}
-                </p>
+            {entries.direct.length === 0 && entries.related.length === 0 && (
+              <div className="space-y-3 mb-6">
+                <Skeleton className="h-4 w-24 rounded" />
+                <Skeleton className="h-10 w-full rounded-lg" />
+                <Skeleton className="h-10 w-4/5 rounded-lg" />
               </div>
             )}
 

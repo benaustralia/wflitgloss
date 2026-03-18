@@ -76,7 +76,7 @@ userId          string    Reserved for future auth
 
 **Header**:
 - Title: "litgloss" (text-5xl bold, fade-in + slide-up animation, 1s duration)
-- Subtitle: "Whitefriars 2026" (text-xl muted, same animation with 100ms delay)
+- Subtitle: "Learn Shakespeare's English" (text-xl muted, same animation with 100ms delay)
 
 **Search bar**:
 - Search icon (left-inset) + text input, placeholder "Search"

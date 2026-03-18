@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TranslationPanel, WordTokens } from '@/components/learifier';
+import { TranslationPanel, WordTokens, TranslationKey } from '@/components/learifier';
 import { WordSheet } from '@/components/word-sheet';
 import { translate, warmWord, prewarmCommon } from '@/learifier-api';
 import { Input } from '@/components/ui/input';
@@ -20,17 +20,15 @@ import {
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Search, ArrowLeft, Volume2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import { Footer } from '@/components/footer';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
 import { glossaryService } from '@/lib/glossaryService';
 
 const debounce = (func, wait) => { let timeout; return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); }; };
 
 export default function GlossaryApp() {
   const [translation, setTranslation] = useState({ words: [], loading: false, error: null, activeWord: null });
-  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', loading: true, error: null, localTerm: null, importJson: '', importStatus: '', isGeneratingAudio: false, fetchingIPA: false, flashId: null });
+  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', loading: true, error: null, localTerm: null, importJson: '', importStatus: '', fetchingIPA: false, flashId: null });
   
   // Create a ref that always points to the latest state to avoid stale closures in async handlers
   const sRef = useRef(s);
@@ -43,9 +41,10 @@ export default function GlossaryApp() {
     if (!text) return;
     setTranslation(t => ({ ...t, loading: true, error: null, words: [] }));
     try {
-      const result = await translate(text);
+      const result = await translate(text, (words) => {
+        setTranslation(t => ({ ...t, loading: false, words }));
+      });
       if (!result?.length) { setTranslation(t => ({ ...t, loading: false })); return; }
-      setTranslation(t => ({ ...t, words: result, loading: false }));
       // Skip save if nothing was actually translated
       if (result.every(w => w.type === 'untranslated')) return;
       const elizabethan = result.map(w => w.display).join(' ');
@@ -327,104 +326,6 @@ export default function GlossaryApp() {
         update({ view: 'list', selected: null, localTerm: null });
       }
     },
-    speak: async (termOrText = null) => {
-      let text = '';
-      let termObj = null;
-
-      // Get latest state from ref to avoid stale closure
-      const currentState = sRef.current;
-
-      if (typeof termOrText === 'string') {
-        text = termOrText;
-        // Try to find the term object if passed as string (from list view)
-        termObj = currentState.terms.find(t => t.term === text);
-      } else if (termOrText && typeof termOrText === 'object') {
-        // Passed as object (future proofing)
-        termObj = termOrText;
-        text = termObj.term;
-      } else {
-        // Fallback to localTerm (detail view)
-        termObj = currentState.localTerm;
-        text = termObj?.term;
-      }
-
-      if (!text || currentState.isGeneratingAudio) return;
-
-      // 1. Check if we have a cached URL in the term object
-      if (termObj && termObj.audioUrl) {
-        const audio = new Audio(termObj.audioUrl);
-        audio.play().catch(e => console.error('Playback error:', e));
-        return;
-      }
-
-      const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY;
-      if (!apiKey) {
-        console.error('No ElevenLabs API key found. Set VITE_ELEVENLABS_API_KEY in .env.local');
-        return;
-      }
-
-      update({ isGeneratingAudio: true });
-
-      try {
-        const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/IKne3meq5aSn9XLyUdCD', {
-          method: 'POST',
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': apiKey
-          },
-          body: JSON.stringify({
-            text: text,
-            model_id: 'eleven_turbo_v2_5',
-            voice_settings: { stability: 0.3, similarity_boost: 0.3, style: 0.2, use_speaker_boost: true }
-          })
-        });
-
-        if (response.ok) {
-          const audioBlob = await response.blob();
-
-          // Play immediately
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl);
-
-          audio.play()
-            .then(() => update({ isGeneratingAudio: false }))
-            .catch(e => {
-              console.error('Audio playback error:', e);
-              update({ isGeneratingAudio: false });
-            });
-
-          // 2. Upload to Firebase Storage if we have a valid term ID
-          if (termObj && termObj.id && !termObj.id.match(/^\d+$/)) { // Check if ID is not temp timestamp
-            try {
-              const storageRef = ref(storage, `audio/${termObj.id}.mp3`);
-              await uploadBytes(storageRef, audioBlob);
-              const downloadUrl = await getDownloadURL(storageRef);
-
-              // 3. Update Firestore with new URL
-              await glossaryService.updateTerm(termObj.id, { audioUrl: downloadUrl });
-
-              // Update local state
-              update(prev => ({
-                ...prev,
-                terms: prev.terms.map(t => t.id === termObj.id ? { ...t, audioUrl: downloadUrl } : t),
-                localTerm: prev.localTerm && prev.localTerm.id === termObj.id ? { ...prev.localTerm, audioUrl: downloadUrl } : prev.localTerm,
-                selected: prev.selected && prev.selected.id === termObj.id ? { ...prev.selected, audioUrl: downloadUrl } : prev.selected
-              }));
-
-            } catch (uploadError) {
-              console.error('Failed to cache audio:', uploadError);
-            }
-          }
-        } else {
-          console.error('ElevenLabs API error:', response.status, response.statusText);
-          update({ isGeneratingAudio: false });
-        }
-      } catch (error) {
-        console.error('ElevenLabs error:', error);
-        update({ isGeneratingAudio: false });
-      }
-    },
     exportTerms: () => {
       const currentState = sRef.current;
       const exportData = currentState.terms.map(({ id, ...term }) => term); 
@@ -580,22 +481,27 @@ export default function GlossaryApp() {
         {/* Search bar */}
         <div className="flex gap-2 items-center px-4 pt-4 pb-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Type anything in modern English..."
               value={s.search}
               onChange={(e) => updateSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && showGoButton && handleTranslate()}
-              className="w-full pl-10 h-10 text-sm"
+              className="w-full h-10 text-sm"
             />
           </div>
           {showGoButton && (
-            <div className="relative shrink-0">
-              <span className="absolute inset-0 rounded-md bg-primary animate-ping opacity-40 pointer-events-none" />
-              <Button className="relative" onClick={handleTranslate}>Go</Button>
-            </div>
+            <Button
+              size="icon"
+              onClick={handleTranslate}
+              aria-label="Translate to Shakespearean"
+              className="shrink-0 bg-transparent border border-violet-500 text-violet-500 hover:bg-violet-500/10 hover:border-violet-400 ring-2 ring-violet-500/30 animate-pulse"
+            >
+              <Sparkles className="h-4 w-4" />
+            </Button>
           )}
         </div>
+
+        <TranslationKey />
 
         {/* Auto-translation panel — appears immediately below search when active */}
         {(translation.loading || translation.words.length > 0 || translation.error) && s.search.trim() && (
@@ -626,12 +532,9 @@ export default function GlossaryApp() {
                 <div
                   key={term.id}
                   id={`term-${term.id}`}
-                  className={`p-4 flex flex-col gap-2 transition-all duration-700 ${matchedTermId === term.id ? 'bg-primary/20' : s.flashId === term.id ? 'bg-primary/20' : ''}`}
+                  className={`p-4 flex flex-col gap-2 transition-all duration-700 ${matchedTermId === term.id ? 'bg-violet-500/15' : s.flashId === term.id ? 'bg-violet-500/15' : ''}`}
                 >
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <Button size="icon" variant="ghost" onClick={() => h.speak(term.term)} disabled={s.isGeneratingAudio}>
-                      <Volume2 />
-                    </Button>
                     {term.words
                       ? <WordTokens words={term.words} onTap={(word) => setTranslation(t => ({ ...t, activeWord: word }))} />
                       : <div className="font-medium text-base text-foreground break-words">{term.term || 'Untitled'}</div>

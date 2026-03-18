@@ -51,7 +51,7 @@ function Ring({ size, strokeWidth, pct, color }) {
 
 export function CreditOrb() {
   const [credits, setCredits] = useState({ remaining: BUDGET, pct: 1, translations: 0 })
-  const [open, setOpen]       = useState(true)
+  const [open, setOpen]       = useState(() => !localStorage.getItem('shakelear-welcomed'))
 
   useEffect(() => {
     const unsub = subscribeToCredits(setCredits)
@@ -71,7 +71,7 @@ export function CreditOrb() {
         <Ring size={SIZE} strokeWidth={STROKE} pct={pct} color={color} />
       </button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(v) => { if (!v) localStorage.setItem('shakelear-welcomed', '1'); setOpen(v) }}>
         <DialogContent className="max-w-sm" aria-describedby={undefined}>
           {/* Hidden title for accessibility */}
           <DialogHeader className="sr-only">
@@ -81,33 +81,41 @@ export function CreditOrb() {
           <div className="flex flex-col gap-5 pt-2">
 
             <h1 className="text-4xl font-bold text-primary text-center">Shake-o-Lingo</h1>
+            <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground text-center -mt-3">A 2026 Gift for Whitefriars</p>
 
             <div className="text-sm text-muted-foreground leading-relaxed space-y-3">
               <p>
-                <strong className="text-foreground">Shake-o-Lingo</strong> is a gift for the 2026 Whitefriars.
-                Learn Shakespeare's English by typing modern English;{' '}
-                <strong className="text-foreground">Claude.ai</strong> will translate for you.
-                With generous permission from{' '}
+                Type modern English and watch <strong className="text-foreground">Claude.ai</strong> translate
+                it into Shakespeare's English. With the generous permission of{' '}
                 <a
                   href="https://www.shakespeareswords.com/Public/DavidAndBen.aspx"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-semibold text-foreground hover:underline"
                 >
-                  David Crystal &amp; Ben Crystal
+                  David and Ben Crystal
                 </a>
-                , Elizabethan words in your entries are cross‑referenced with shakespeareswords.com.
+                , Elizabethan terms are cross‑referenced directly with{' '}
+                <a
+                  href="https://www.shakespeareswords.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-foreground hover:underline"
+                >
+                  shakespeareswords.com
+                </a>
+                .
               </p>
               <p>
-                Finally, note that I am footing the bill for the Shake-o-Lingo AI credits, but the
-                tank will eventually run dry — even though the site manages resources with
-                Voyager-level efficiency. Like all digital dreams, Shake-o-Lingo is a 'walking
-                shadow' and will be no more at the end of 2026.
+                <strong className="text-foreground">A Note on the Run:</strong><br />
+                While this site manages resources with Voyager-level efficiency, I am personally
+                funding the AI credits. This "walking shadow" is a state-of-the-art pilot for 2026;
+                once the tank runs dry, the curtain falls. Enjoy this frontier of Shakespearean
+                learning while the lights are up.
               </p>
-              <p>Enjoy learning Shakespeare's English,</p>
               <p>
                 <strong className="text-foreground">Ben Hinton</strong><br />
-                VCE Tutor (Melbourne) | Creator of Shake-o-Lingo
+                VCE Tutor | Creator of Shake-o-Lingo
               </p>
             </div>
 

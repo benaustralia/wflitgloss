@@ -6,8 +6,8 @@ import { warmWord } from '@/learifier-api'
 function WordToken({ word, onTap }) {
   const cls = [
     'word-token inline-block mr-[0.3em] my-1',
-    (word.type === 'essential' || word.type === 'translated') && 'text-foreground cursor-pointer hover:text-foreground/70',
-    word.type === 'untranslated' && 'text-muted-foreground/50',
+    (word.type === 'essential' || word.type === 'translated') && 'text-violet-500 cursor-pointer hover:text-violet-500/70',
+    word.type === 'untranslated' && 'text-muted-foreground/40',
     word.isMadness               && 'madness-word',
   ].filter(Boolean).join(' ')
 
@@ -24,6 +24,19 @@ function WordToken({ word, onTap }) {
 }
 
 const DOT = 'w-1.5 h-1.5 rounded-full inline-block'
+
+export function TranslationKey() {
+  return (
+    <div className="flex items-center gap-5 px-4 py-2">
+      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-violet-500">
+        <span className={`${DOT} bg-violet-500`} /> translated
+      </span>
+      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground/40">
+        <span className={`${DOT} bg-muted-foreground/40`} /> unchanged
+      </span>
+    </div>
+  )
+}
 
 export function WordTokens({ words, onTap }) {
   if (!words?.length) return null
@@ -69,14 +82,6 @@ export function TranslationPanel({ words, loading, onTap }) {
       <p className="text-lg leading-[2.2] flex flex-wrap">
         {words.map((word, i) => <WordToken key={i} word={word} onTap={onTap} />)}
       </p>
-      <div className="mt-4 flex items-center gap-5">
-        <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground">
-          <span className={`${DOT} bg-foreground`} /> translated
-        </span>
-        <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground/50">
-          <span className={`${DOT} bg-muted-foreground/50`} /> unchanged
-        </span>
-      </div>
     </div>
   )
 }
