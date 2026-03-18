@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TranslationPanel } from '@/components/learifier';
+import { TranslationPanel, WordTokens } from '@/components/learifier';
 import { WordSheet } from '@/components/word-sheet';
 import { translate } from '@/learifier-api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +19,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Plus, Search, ArrowLeft, Tag, X, ChevronDown, Volume2, Package, Upload, Download, Copy, Sparkles, Languages } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Search, ArrowLeft, Volume2, Sparkles } from 'lucide-react';
 import { Footer } from '@/components/footer';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
@@ -30,21 +30,51 @@ const debounce = (func, wait) => { let timeout; return (...args) => { clearTimeo
 
 export default function GlossaryApp() {
   const [translation, setTranslation] = useState({ words: [], loading: false, error: null, activeWord: null });
-  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', tags: [], selectedTag: 'all', loading: true, error: null, localTerm: null, newTag: '', importJson: '', importStatus: '', tagDropdownOpen: false, isGeneratingAudio: false, fetchingIPA: false, flashId: null });
+  const [s, setS] = useState({ terms: [], search: '', selected: null, view: 'list', loading: true, error: null, localTerm: null, importJson: '', importStatus: '', isGeneratingAudio: false, fetchingIPA: false, flashId: null });
   
   // Create a ref that always points to the latest state to avoid stale closures in async handlers
   const sRef = useRef(s);
   useEffect(() => { sRef.current = s; }, [s]);
 
   const update = (u) => setS(p => typeof u === 'function' ? u(p) : { ...p, ...u });
-  const updateSearch = (val) => { update({ search: val }); setTranslation({ words: [], loading: false, error: null, activeWord: null }); };
+
+  const handleTranslate = async () => {
+    const text = sRef.current.search.trim();
+    if (!text) return;
+    setTranslation(t => ({ ...t, loading: true, error: null, words: [] }));
+    try {
+      const result = await translate(text);
+      if (!result?.length) { setTranslation(t => ({ ...t, loading: false })); return; }
+      setTranslation(t => ({ ...t, words: result, loading: false }));
+      // Skip save if nothing was actually translated
+      if (result.every(w => w.type === 'untranslated')) return;
+      const elizabethan = result.map(w => w.display).join(' ');
+      const termData = {
+        term: elizabethan.charAt(0).toUpperCase() + elizabethan.slice(1),
+        definition: text.charAt(0).toUpperCase() + text.slice(1),
+        words: result,
+        ipa: '', tags: [],
+      };
+      glossaryService.addTerm(termData)
+        .then(termId => setS(prev => ({ ...prev, terms: [{ id: termId, ...termData }, ...prev.terms] })))
+        .catch(e => console.error('Auto-save failed:', e));
+    } catch (e) {
+      setTranslation(t => ({ ...t, error: e.message, loading: false }));
+    }
+  };
+
+  const updateSearch = (val) => {
+    update({ search: val });
+    setTranslation({ words: [], loading: false, error: null, activeWord: null });
+  };
+
   const pendingAddRef = useRef(null);
   useEffect(() => { (async () => { try { update({ loading: true, error: null }); const allTerms = await glossaryService.getAllTerms(); const allTags = [...new Set(allTerms.flatMap(term => term.tags || []))].sort(); update({ terms: allTerms, tags: allTags, error: null, loading: false }); } catch (err) { const errorMessage = err.message || 'Failed to load data. Please check Firebase configuration.'; console.error('Failed to load glossary data:', err); update({ error: errorMessage, loading: false }); } })(); }, []);
-  useEffect(() => { const handleClickOutside = (e) => { if (s.tagDropdownOpen && !e.target.closest('.tag-dropdown')) { update({ tagDropdownOpen: false }); } }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, [s.tagDropdownOpen]);
   useEffect(() => { 
     const handleEscape = async (e) => { 
-      if (e.key === 'Escape') { 
-        e.preventDefault(); 
+      if (e.key === 'Escape') {
+        if (document.querySelector('[data-state="open"]')) return;
+        e.preventDefault();
         const currentState = sRef.current;
         if (document.activeElement && document.activeElement.tagName !== 'BODY') { 
           document.activeElement.blur(); 
@@ -55,14 +85,12 @@ export default function GlossaryApp() {
           if (shouldDelete && term.id) { 
             update((prevState) => ({ ...prevState, terms: prevState.terms.filter(t => t.id !== term.id), view: 'list', selected: null, localTerm: null })); 
             glossaryService.deleteTerm(term.id).catch(err => console.error('Failed to delete blank term:', err)); 
-          } else { 
-            update({ view: 'list', selected: null, localTerm: null }); 
-          } 
-        } else if (currentState.view === 'import') { 
-          update({ view: 'list' }); 
-        } 
-      } 
-    }; 
+          } else {
+            update({ view: 'list', selected: null, localTerm: null });
+          }
+        }
+      }
+    };
     document.addEventListener('keydown', handleEscape, true); 
     return () => document.removeEventListener('keydown', handleEscape, true); 
   }, []); // Empty deps because we use sRef
@@ -298,22 +326,6 @@ export default function GlossaryApp() {
         update({ view: 'list', selected: null, localTerm: null });
       }
     },
-    addTag: () => { 
-      update(prev => {
-        const trimmedTag = prev.newTag.trim();
-        if (trimmedTag && !prev.localTerm.tags?.includes(trimmedTag)) {
-          const updatedTags = [...(prev.localTerm.tags || []), trimmedTag];
-          return { ...prev, localTerm: { ...prev.localTerm, tags: updatedTags }, newTag: '' };
-        }
-        return prev;
-      });
-    },
-    removeTag: (tagToRemove) => { 
-      update(prev => {
-        const updatedTags = prev.localTerm.tags?.filter(tag => tag !== tagToRemove) || [];
-        return { ...prev, localTerm: { ...prev.localTerm, tags: updatedTags } };
-      });
-    },
     speak: async (termOrText = null) => {
       let text = '';
       let termObj = null;
@@ -478,6 +490,20 @@ export default function GlossaryApp() {
         update({ importStatus: `❌ Cleanup failed: ${err.message}` }); 
       } 
     },
+    clearAllEntries: async () => {
+      try {
+        update({ importStatus: 'Clearing all entries...' });
+        const currentState = sRef.current;
+        let deleted = 0;
+        for (const term of currentState.terms) {
+          await glossaryService.deleteTerm(term.id);
+          deleted++;
+        }
+        update({ importStatus: `✅ Cleared ${deleted} entries!`, terms: [] });
+      } catch (err) {
+        update({ importStatus: `❌ Clear failed: ${err.message}` });
+      }
+    },
     capitalizeAllEntries: async () => {
       try {
         update({ importStatus: 'Capitalizing all entries...' });
@@ -519,20 +545,24 @@ export default function GlossaryApp() {
     }
   };
 
-  const getFilteredTerms = (searchOverride = null) => { 
-    let filtered = s.terms || []; 
-    const searchTerm = searchOverride !== null ? searchOverride : s.search;
-    if (s.selectedTag !== 'all') filtered = filtered.filter(term => term.tags?.includes(s.selectedTag)); 
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      filtered = filtered.filter(term => 
-        (term.term || '').toLowerCase().includes(lowerSearch) || 
-        (term.definition || '').toLowerCase().includes(lowerSearch) || 
-        term.tags?.some(tag => tag.toLowerCase().includes(lowerSearch))
-      ); 
+  const getSortedTerms = () =>
+    (s.terms || []).slice().sort((a, b) => (a.term || '').localeCompare(b.term || '', undefined, { sensitivity: 'base' }));
+
+  const matchedTermId = s.search.trim()
+    ? (s.terms.find(t =>
+        (t.term || '').toLowerCase().includes(s.search.toLowerCase()) ||
+        (t.definition || '').toLowerCase().includes(s.search.toLowerCase())
+      )?.id ?? null)
+    : null;
+
+  useEffect(() => {
+    if (matchedTermId) {
+      const el = document.getElementById(`term-${matchedTermId}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    return filtered.sort((a, b) => (a.term || "").localeCompare(b.term || "", undefined, { sensitivity: 'base' })); 
-  };
+  }, [matchedTermId]);
+
+  const showGoButton = s.search.trim() && !matchedTermId && !translation.loading && !translation.words.length;
 
   if (s.loading) return <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div><p className="text-muted-foreground">Loading glossary...</p></div></div>;
   if (s.error) return <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex items-center justify-center p-4"><div className="text-center"><div className="text-destructive mb-4">⚠️</div><p className="text-destructive mb-4">{s.error}</p><Button onClick={() => window.location.reload()}>Try Again</Button></div></div>;
@@ -540,156 +570,100 @@ export default function GlossaryApp() {
   return <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex flex-col">
     <Toaster />
     <div className="flex-none px-4 pt-8 pb-0 text-center">
-      <h1 className="text-5xl font-bold text-primary animate-in fade-in slide-in-from-bottom-4 duration-1000">Shake-o-Lingo</h1>
-      <h2 className="text-xl text-muted-foreground mt-2 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">Whitefriars 2026</h2>
+      <div className="flex items-center justify-center">
+        <h1 className="text-5xl font-bold text-primary animate-in fade-in slide-in-from-bottom-4 duration-1000">Shake-o-Lingo</h1>
+      </div>
+      <h2 className="text-xl text-muted-foreground mt-2 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-100">Learn Shakespeare's English</h2>
     </div>
     {(s.view === 'list' ? <div className="flex flex-col flex-1 w-full">
-        <div className="flex gap-2 items-center px-4 pt-4">
+        {/* Search bar */}
+        <div className="flex gap-2 items-center px-4 pt-4 pb-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search" 
-              value={s.search} 
+            <Input
+              placeholder="Type anything in modern English..."
+              value={s.search}
               onChange={(e) => updateSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && showGoButton && handleTranslate()}
               className="w-full pl-10 h-10 text-sm"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const term = e.target.value.trim();
-                  if (term && getFilteredTerms(term).length === 0) {
-                    h.add(term);
-                  }
-                }
-              }} 
             />
           </div>
-          {s.tags && s.tags.length > 0 && <div className="relative tag-dropdown">
-            <Button variant="outline" size="sm" onClick={() => update({ tagDropdownOpen: !s.tagDropdownOpen })} className="whitespace-nowrap">
-              <Tag />{s.selectedTag === 'all' ? 'All Tags' : s.selectedTag}<ChevronDown />
-            </Button>
-            {s.tagDropdownOpen && <div className="absolute top-full right-0 mt-1 w-48 bg-background border border-border rounded-md shadow-lg z-50">
-              <div className="p-1">
-                <Button variant={s.selectedTag === 'all' ? 'default' : 'ghost'} size="sm" onClick={() => { update({ selectedTag: 'all', tagDropdownOpen: false }); }} className="w-full justify-start"><Tag />All Tags</Button>
-                {s.tags.map(tag => <Button key={tag} variant={s.selectedTag === tag ? 'default' : 'ghost'} size="sm" onClick={() => { update({ selectedTag: tag, tagDropdownOpen: false }); }} className="w-full justify-start"><Tag />{tag}</Button>)}
-              </div>
-            </div>}
-          </div>}
+          {showGoButton && (
+            <div className="relative shrink-0">
+              <span className="absolute inset-0 rounded-md bg-primary animate-ping opacity-40 pointer-events-none" />
+              <Button className="relative" onClick={handleTranslate}>Go</Button>
+            </div>
+          )}
         </div>
-        <div className="flex justify-center gap-2 px-4 py-2">
-          <Button onClick={() => h.add()}><Plus />Add Term</Button>
-          <Button variant="outline" onClick={() => update({ view: 'import' })}><Package />Import/Export</Button>
-        </div>
+
+        {/* Auto-translation panel — appears immediately below search when active */}
+        {(translation.loading || translation.words.length > 0 || translation.error) && s.search.trim() && (
+          <div className="px-4 pb-4 border-b border-border">
+            {translation.loading && (
+              <p className="text-muted-foreground text-sm italic animate-pulse py-4">Translating…</p>
+            )}
+            {translation.error && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertDescription>{translation.error}</AlertDescription>
+              </Alert>
+            )}
+            {translation.words.length > 0 && (
+              <TranslationPanel
+                words={translation.words}
+                loading={false}
+                onTap={(word) => setTranslation(t => ({ ...t, activeWord: word }))}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Term list */}
         <div className="flex-1 relative">
           <ScrollArea className="h-full">
             <div className="divide-y divide-border">
-              {getFilteredTerms().map(term => <div key={term.id} id={`term-${term.id}`} className={`p-4 flex flex-col gap-2 hover:bg-accent active:bg-accent/80 cursor-pointer transition-all duration-1000 ${s.flashId === term.id ? 'bg-primary/20' : ''}`} onClick={() => { update({ selected: term, localTerm: term, view: 'detail' }); }}>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  {term.term && <div onClick={(e) => e.stopPropagation()}><Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); h.speak(term.term); }} disabled={s.isGeneratingAudio}>
-                    <Volume2 />
-                  </Button></div>}
-                  <div className="font-medium text-base text-foreground break-words">{term.term || "Untitled"}</div>
-                  {term.ipa && <div className="text-sm text-muted-foreground font-mono">{term.ipa}</div>}
+              {getSortedTerms().map(term => (
+                <div
+                  key={term.id}
+                  id={`term-${term.id}`}
+                  className={`p-4 flex flex-col gap-2 transition-all duration-700 ${matchedTermId === term.id ? 'bg-primary/20' : s.flashId === term.id ? 'bg-primary/20' : ''}`}
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <Button size="icon" variant="ghost" onClick={() => h.speak(term.term)} disabled={s.isGeneratingAudio}>
+                      <Volume2 />
+                    </Button>
+                    {term.words
+                      ? <WordTokens words={term.words} onTap={(word) => setTranslation(t => ({ ...t, activeWord: word }))} />
+                      : <div className="font-medium text-base text-foreground break-words">{term.term || 'Untitled'}</div>
+                    }
+                    {term.ipa && <div className="text-sm text-muted-foreground font-mono">{term.ipa}</div>}
+                  </div>
+                  {term.definition && (
+                    <div className="text-sm text-muted-foreground line-clamp-2 break-words">{term.definition}</div>
+                  )}
                 </div>
-                <div className="text-sm text-muted-foreground line-clamp-2 break-words">{term.definition || "Tap to add definition"}</div>
-                {term.tags && term.tags.length > 0 && <div className="flex flex-wrap gap-1">{term.tags.map(tag => <span key={tag} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-primary/10 text-primary"><Tag className="h-2 w-2 mr-1" />{tag}</span>)}</div>}
-              </div>)}
-              {getFilteredTerms().length === 0 && !s.search && <div className="p-8 text-center text-muted-foreground">No terms yet</div>}
+              ))}
+              {getSortedTerms().length === 0 && (
+                <div className="p-8 text-center text-muted-foreground">No terms yet</div>
+              )}
             </div>
           </ScrollArea>
           <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none"></div>
         </div>
-        {s.search.trim() && getFilteredTerms().length === 0 && (
-          <div className="px-4 py-4 border-t border-border">
-            <Button
-              className="w-full"
-              variant="outline"
-              disabled={translation.loading || s.search.trim().split(/\s+/).length < 3}
-              onClick={async () => {
-                setTranslation(t => ({ ...t, loading: true, error: null, words: [] }));
-                try {
-                  const result = await translate(s.search);
-                  setTranslation(t => ({ ...t, words: result ?? [], loading: false }));
-                } catch (e) {
-                  setTranslation(t => ({ ...t, error: e.message, loading: false }));
-                }
-              }}
-            >
-              <Languages />
-              {s.search.trim().split(/\s+/).length < 3 ? 'Enter at least 3 words to translate' : 'Translate into Shakespearean'}
-            </Button>
-            {translation.error && <p className="mt-2 text-destructive text-xs">{translation.error}</p>}
-            <TranslationPanel
-              words={translation.words}
-              loading={translation.loading}
-              onTap={(word) => setTranslation(t => ({ ...t, activeWord: word }))}
-            />
-          </div>
-        )}
         <WordSheet word={translation.activeWord} onClose={() => setTranslation(t => ({ ...t, activeWord: null }))} />
-        <Footer />
-      </div> : s.view === 'import' ? <div className="flex flex-col h-screen w-full">
-      <div className="flex-none p-4 border-b border-border bg-background flex items-center">
-        <div className="flex-1">
-          <Button variant="ghost" onClick={() => update({ view: 'list' })}><ArrowLeft />Back</Button>
-        </div>
-        <span className="text-lg font-medium">Import Terms</span>
-        <div className="flex-1"></div>
-      </div>
-      <div className="flex-1 flex flex-col p-4 gap-4">
-        <div className="border rounded-lg p-4 bg-muted/50">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">JSON Format</span>
-            <Button size="sm" variant="ghost" onClick={() => { navigator.clipboard.writeText('[{"term": "Algorithm", "definition": "Step-by-step procedure", "ipa": "/ˈælɡərɪðəm/", "tags": ["computer-science"]}]'); toast.success('Copied to clipboard'); }}>
-              <Copy />
-              Copy
-            </Button>
-          </div>
-          <pre className="text-xs font-mono overflow-x-auto">{`[{
-  "term": "Algorithm",
-  "definition": "Step-by-step procedure",
-  "ipa": "/ˈælɡərɪðəm/",
-  "tags": ["computer-science"]
-}]`}</pre>
-        </div>
-        <Textarea placeholder={"Paste JSON here.\n\nHint: Feed your word list to ChatGPT or Gemini as well as the template above...and it will poop out perfect JSON for you!"} value={s.importJson} onChange={(e) => update({ importJson: e.target.value })} className="flex-1 text-sm font-mono" />
-        {s.importStatus && <Alert variant={s.importStatus.includes('❌') ? 'destructive' : 'default'}><AlertDescription>{s.importStatus}</AlertDescription></Alert>}
-        <div className="flex justify-end">
-          <Button onClick={h.importTerms} disabled={!s.importJson.trim()}>
-            <Download />
-            Import
-          </Button>
-        </div>
-        <div className="mt-4 pt-4 border-t border-border">
-          <span className="text-sm font-medium block mb-2 text-muted-foreground">Maintenance</span>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={h.exportTerms}>
-              <Upload />
-              Backup
-            </Button>
-            <Button variant="outline" onClick={h.capitalizeAllEntries}>
-              <Sparkles />
-              Capitalize All
-            </Button>
-            <Button variant="outline" onClick={h.cleanupBlankEntries}>
-              <X />
-              Cleanup Blanks
-            </Button>
-          </div>
-        </div>
-      </div>
-      <Footer />
-    </div> : <div className="flex flex-col w-full">
+        <Footer onClearAll={s.terms.length > 0 ? () => { if (window.confirm(`Delete all ${s.terms.length} entries?`)) h.clearAllEntries(); } : null} />
+      </div> : <div className="flex flex-col w-full">
       <div className="flex-none p-4 border-b border-border bg-background flex items-center sticky top-0 z-10">
         <div className="flex-1">
           <Button variant="ghost" onClick={h.goBack}><ArrowLeft />Back</Button>
         </div>
-        <span className="text-lg font-medium truncate max-w-xs text-center">{s.localTerm?.term || 'New Term'}</span>
+        <span className="text-lg font-medium truncate max-w-xs text-center">{s.localTerm?.term || 'New Shakespearean Phrase'}</span>
         <div className="flex-1"></div>
       </div>
       {/* Constrain form width for better readability on large screens */}
       <div className="p-4 space-y-4 w-full max-w-xl mx-auto">
         <div className="space-y-2">
           <div className="flex gap-2">
-            <Input placeholder="Term" value={s.localTerm?.term || ''} onChange={(e) => h.inputChange('term', e.target.value)} className="flex-1 h-12 text-lg font-medium" />
+            <Input placeholder="Shakespearean phrase" value={s.localTerm?.term || ''} onChange={(e) => h.inputChange('term', e.target.value)} className="flex-1 h-12 text-lg font-medium" />
           </div>
         </div>
         <div className="relative">
@@ -709,8 +683,7 @@ export default function GlossaryApp() {
             <Sparkles />
           </Button>
         </div>
-        <Textarea placeholder="Definition" value={s.localTerm?.definition || ''} onChange={(e) => h.inputChange('definition', e.target.value)} className="w-full min-h-40 text-base resize-none" rows={10} />
-        <div className="space-y-3">{s.localTerm?.tags && s.localTerm.tags.length > 0 && <div className="flex flex-wrap gap-2">{s.localTerm.tags.map(tag => <span key={tag} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary/10 text-primary"><Tag className="h-3 w-3 mr-1" />{tag}<Button variant="ghost" size="sm" onClick={() => h.removeTag(tag)} className="ml-1 -mr-2 px-1"><X /></Button></span>)}</div>}<div className="flex gap-2"><Input placeholder="Tag" value={s.newTag || ''} onChange={(e) => update({ newTag: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && h.addTag()} className="flex-1 text-sm" /><Button size="sm" variant="outline" onClick={h.addTag} disabled={!s.newTag || !s.newTag.trim()}><Tag />Add</Button></div></div>
+        <Textarea placeholder="Modern English phrase" value={s.localTerm?.definition || ''} onChange={(e) => h.inputChange('definition', e.target.value)} className="w-full min-h-40 text-base resize-none" rows={10} />
       </div>
       <div className="flex-none p-4 border-t border-border bg-background">
         <div className="flex justify-end gap-2 w-full max-w-xl mx-auto">

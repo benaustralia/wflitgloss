@@ -6,19 +6,28 @@ function WordToken({ word, onTap }) {
   const cls = [
     'word-token inline-block mr-[0.3em] my-1',
     word.type === 'essential'    && 'text-amber-500 font-bold cursor-pointer hover:text-amber-400',
-    word.type === 'translated'   && 'text-foreground',
+    word.type === 'translated'   && 'text-foreground cursor-pointer hover:text-foreground/70',
     word.type === 'untranslated' && 'text-muted-foreground/50',
     word.isMadness               && 'madness-word',
   ].filter(Boolean).join(' ')
 
   return (
-    <span className={cls} onClick={() => word.type === 'essential' && onTap(word)}>
+    <span className={cls} onClick={() => (word.type === 'essential' || word.type === 'translated') && onTap(word)}>
       {word.pre}{word.core}{word.post}
     </span>
   )
 }
 
 const DOT = 'w-1.5 h-1.5 rounded-full inline-block'
+
+export function WordTokens({ words, onTap }) {
+  if (!words?.length) return null
+  return (
+    <p className="text-base leading-[2] flex flex-wrap">
+      {words.map((word, i) => <WordToken key={i} word={word} onTap={onTap} />)}
+    </p>
+  )
+}
 
 export function TranslationPanel({ words, loading, onTap }) {
   const containerRef = useRef(null)

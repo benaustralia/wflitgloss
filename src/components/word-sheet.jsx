@@ -2,26 +2,33 @@ import { useState, useRef, useLayoutEffect, useEffect, useCallback } from 'react
 import gsap from 'gsap'
 import { Button } from '@/components/ui/button'
 import { ExternalLink, X } from 'lucide-react'
-
-async function fetchShakespearesWords(word) {
-  const res = await fetch('https://www.shakespeareswords.com/ajax/AjaxResponder.aspx', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ commandName: 'cmd_autocomplete', parameters: word }),
-  })
-  const data = await res.json()
-  const results = JSON.parse(data.parameters)
-  return results.filter(r => r.Headword.toLowerCase() === word.toLowerCase())
-}
+import { lookupShakespeare } from '@/learifier-api'
 
 const DISMISS_THRESHOLD = 80
+
+function EntryLink({ entry }) {
+  return (
+    <a
+      href={`https://www.shakespeareswords.com/Public/Glossary.aspx?Id=${entry.Id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border hover:bg-accent transition-colors no-underline group"
+    >
+      <div>
+        <span className="text-sm font-medium text-foreground">{entry.Headword}</span>
+        <span className="text-sm text-muted-foreground ml-2">{entry.Definition}</span>
+      </div>
+      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 mt-0.5 transition-colors" />
+    </a>
+  )
+}
 
 export function WordSheet({ word, onClose }) {
   const sheetRef    = useRef(null)
   const backdropRef = useRef(null)
   const dragState   = useRef({ startY: 0, dragging: false })
   const [shown, setShown]     = useState(null)
-  const [entries, setEntries] = useState([])
+  const [entries, setEntries] = useState({ direct: [], related: [] })
 
   // Animate out first, then notify parent — avoids useGSAP revert race
   const animateOut = useCallback(() => {
@@ -35,18 +42,16 @@ export function WordSheet({ word, onClose }) {
     gsap.set(backdropRef.current, { opacity: 0, pointerEvents: 'none' })
   }, [])
 
-  // Fetch first, then animate in — sheet opens at its final size
+  // Animate in immediately, populate entries when fetch completes
   useEffect(() => {
     if (!word) return
     setShown(word)
-    setEntries([])
-    const animateIn = () => {
-      gsap.to(sheetRef.current,    { y: 0, duration: 0.42, ease: 'power3.out', overwrite: true })
-      gsap.to(backdropRef.current, { opacity: 1, pointerEvents: 'auto', duration: 0.25, overwrite: true })
-    }
-    fetchShakespearesWords(word.forms?.[0] ?? word.core)
-      .then(results => { setEntries(results); animateIn() })
-      .catch(() => animateIn())
+    setEntries({ direct: [], related: [] })
+    gsap.to(sheetRef.current,    { y: 0, duration: 0.42, ease: 'power3.out', overwrite: true })
+    gsap.to(backdropRef.current, { opacity: 1, pointerEvents: 'auto', duration: 0.25, overwrite: true })
+    lookupShakespeare(word.forms?.[0] ?? word.core, word.vce_note ? null : word.original)
+      .then(results => setEntries(results))
+      .catch(() => {})
   }, [word])
 
   // Escape key
@@ -103,54 +108,63 @@ export function WordSheet({ word, onClose }) {
         {shown && (
           <div className="overflow-y-auto px-6 pt-5 pb-10">
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-amber-500 mb-2">
-              Essential Word
+              {shown.type === 'essential' ? 'Essential Word' : 'Elizabethan Word'}
             </p>
-            <h2 className="text-4xl font-bold text-amber-500 mb-5">
+            <h2 className={`text-4xl font-bold mb-5 ${shown.type === 'essential' ? 'text-amber-500' : 'text-foreground'}`}>
               {shown.forms?.[0] ?? shown.core}
             </h2>
 
-            <div className="border-l-2 border-primary/30 pl-4 mb-6">
-              <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
-                VCE Note
-              </p>
-              <p className="text-base leading-relaxed text-muted-foreground italic">
-                {shown.vce_note}
-              </p>
-            </div>
+            {shown.vce_note && (
+              <div className="border-l-2 border-primary/30 pl-4 mb-6">
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2">
+                  VCE Note
+                </p>
+                <p className="text-base leading-relaxed text-muted-foreground italic">
+                  {shown.vce_note}
+                </p>
+              </div>
+            )}
 
-            {entries.length > 0 && (
+            {(entries.direct.length > 0 || entries.related.length > 0) && (
               <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-                    From Shakespeare's Words
-                  </p>
-                  <a
-                    href="https://www.shakespeareswords.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground/60 hover:text-muted-foreground flex items-center gap-1 transition-colors"
-                  >
-                    shakespeareswords.com <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
+                <a
+                  href="https://www.shakespeareswords.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 mb-4 hover:opacity-80 transition-opacity"
+                >
+                  <img
+                    src="https://www.shakespeareswords.com/Images/ShakespearePortrait100px.png"
+                    alt="Shakespeare's Words"
+                    className="h-12 w-12 rounded-full"
+                  />
+                  <span className="text-xl font-semibold text-foreground transition-colors">
+                    shakespeareswords.com
+                  </span>
+                </a>
 
-                <div className="space-y-2">
-                    {entries.map((entry) => (
-                      <a
-                        key={entry.Id}
-                        href={`https://www.shakespeareswords.com/Public/Glossary.aspx?Id=${entry.Id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border hover:bg-accent transition-colors no-underline group"
-                      >
-                        <div>
-                          <span className="text-sm font-medium text-foreground">{entry.Headword}</span>
-                          <span className="text-sm text-muted-foreground ml-2">{entry.Definition}</span>
-                        </div>
-                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 mt-0.5 transition-colors" />
-                      </a>
-                    ))}
+                {entries.direct.length > 0 && (
+                  <div className="mb-4">
+                    <div className="space-y-2">
+                      {entries.direct.map((entry) => (
+                        <EntryLink key={entry.Id} entry={entry} />
+                      ))}
+                    </div>
                   </div>
+                )}
+
+                {entries.related.length > 0 && (
+                  <div>
+                    <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">
+                      Related Word(s)
+                    </p>
+                    <div className="space-y-2">
+                      {entries.related.map((entry) => (
+                        <EntryLink key={entry.Id} entry={entry} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

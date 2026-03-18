@@ -1,10 +1,11 @@
 import { ScrambleText } from "@/components/gsap/scramble-text";
 import { Badge } from "@/components/ui/badge";
 import { Phone } from "lucide-react";
+import { CreditOrb } from "@/components/credit-orb";
 
 const SCRAMBLE_CHARS = "XZ#@&01{";
 
-export function Footer() {
+export function Footer({ onClearAll }) {
   return (
     <footer className="border-t border-border py-10 px-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-6 sm:gap-4 max-w-xl mx-auto text-center sm:text-left">
@@ -24,15 +25,13 @@ export function Footer() {
           </ScrambleText>
         </div>
 
-        {/* Center: The Release */}
+        {/* Center: Credit Orb */}
         <div className="flex justify-center">
-          <span className="text-sm text-muted-foreground font-mono">
-            Version 12 (Whitefriars)
-          </span>
+          <CreditOrb />
         </div>
 
-        {/* Right: Contact CTA */}
-        <div className="flex justify-center sm:justify-end">
+        {/* Right: Contact CTA + Clear All */}
+        <div className="flex flex-col items-center sm:items-end gap-2">
           <a href="tel:+61490138807" className="no-underline">
             <Badge
               variant="outline"
@@ -42,6 +41,14 @@ export function Footer() {
               0490 138 807
             </Badge>
           </a>
+          {onClearAll && (
+            <button
+              onClick={onClearAll}
+              className="text-[10px] text-muted-foreground/40 hover:text-destructive transition-colors font-mono"
+            >
+              clear all entries
+            </button>
+          )}
         </div>
       </div>
     </footer>

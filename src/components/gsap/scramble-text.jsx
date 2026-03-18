@@ -36,7 +36,6 @@ export const ScrambleText = ({
     useEffect(() => {
         if (scrambleOnLoad) scramble();
         const target = wrapperRef.current;
-        target?.addEventListener("pointerenter", scramble);
 
         // Re-scramble every time the element scrolls into view
         const observer = new IntersectionObserver(
@@ -46,7 +45,6 @@ export const ScrambleText = ({
         if (target) observer.observe(target);
 
         return () => {
-            target?.removeEventListener("pointerenter", scramble);
             observer.disconnect();
         };
     }, [wrapperRef, scramble, scrambleOnLoad]);

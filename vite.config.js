@@ -16,6 +16,13 @@ export default defineConfig({
     watch: {
       usePolling: true,
     },
+    proxy: {
+      '/api/shakespeare': {
+        target: 'https://www.shakespeareswords.com',
+        changeOrigin: true,
+        rewrite: () => '/ajax/AjaxResponder.aspx',
+      },
+    },
   },
   build: {
     rollupOptions: {
