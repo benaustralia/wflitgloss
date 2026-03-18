@@ -22,10 +22,12 @@ function EntryLink({ entry }) {
 
 export function WordSheet({ word, onClose }) {
   const [entries, setEntries] = useState({ direct: [], related: [] })
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!word) return
     setEntries({ direct: [], related: [] })
+    setLoading(true)
     const _diag = msg => { console.log(msg); if (typeof window !== 'undefined') (window.__log = window.__log ?? []).push(msg) }
     _diag(`[sheet] tap "${word.core}" — lookup start`)
     const t0 = performance.now()
@@ -34,8 +36,9 @@ export function WordSheet({ word, onClose }) {
         const ms = Math.round(performance.now() - t0)
         _diag(`[sheet] "${word.core}" — ${results.direct.length + results.related.length} entries in ${ms}ms`)
         setEntries(results)
+        setLoading(false)
       })
-      .catch(err => _diag(`[sheet] "${word.core}" ERROR: ${err.message}`))
+      .catch(err => { _diag(`[sheet] "${word.core}" ERROR: ${err.message}`); setLoading(false) })
   }, [word])
 
   const hasEntries = entries.direct.length > 0 || entries.related.length > 0
@@ -48,7 +51,7 @@ export function WordSheet({ word, onClose }) {
             <p className="text-xs font-mono uppercase tracking-[0.2em] text-violet-500 mb-2">Elizabethan Word</p>
             <h2 className="text-4xl font-bold mb-5 text-foreground">{word.forms?.[0] ?? word.core}</h2>
 
-            {!hasEntries && (
+            {loading && (
               <div className="space-y-3 mb-6">
                 <Skeleton className="h-4 w-24 rounded" />
                 <Skeleton className="h-10 w-full rounded-lg" />
@@ -56,7 +59,11 @@ export function WordSheet({ word, onClose }) {
               </div>
             )}
 
-            {hasEntries && (
+            {!loading && !hasEntries && (
+              <p className="text-sm text-muted-foreground italic">No Elizabethan entries found for this word.</p>
+            )}
+
+            {!loading && hasEntries && (
               <div className="mb-6">
                 <a href="https://www.shakespeareswords.com" target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-3 mb-4 hover:opacity-80 transition-opacity">
