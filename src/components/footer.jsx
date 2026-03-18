@@ -5,7 +5,7 @@ import { CreditOrb } from "@/components/credit-orb";
 
 const SCRAMBLE_CHARS = "XZ#@&01{";
 
-export function Footer({ onClearAll }) {
+export function Footer() {
   return (
     <footer className="border-t border-border py-10 px-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-6 sm:gap-4 max-w-xl mx-auto text-center sm:text-left">
@@ -30,8 +30,8 @@ export function Footer({ onClearAll }) {
           <CreditOrb />
         </div>
 
-        {/* Right: Contact CTA + Clear All */}
-        <div className="flex flex-col items-center sm:items-end gap-2">
+        {/* Right: Contact CTA */}
+        <div className="flex flex-col items-center sm:items-end">
           <a href="tel:+61490138807" className="no-underline">
             <Badge
               variant="outline"
@@ -41,14 +41,6 @@ export function Footer({ onClearAll }) {
               0490 138 807
             </Badge>
           </a>
-          {onClearAll && (
-            <button
-              onClick={onClearAll}
-              className="text-[10px] text-muted-foreground/40 hover:text-destructive transition-colors font-mono"
-            >
-              clear all entries
-            </button>
-          )}
         </div>
       </div>
     </footer>
