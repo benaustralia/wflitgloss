@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TranslationPanel, WordTokens } from '@/components/learifier';
 import { WordSheet } from '@/components/word-sheet';
-import { translate } from '@/learifier-api';
+import { translate, prefetchWords } from '@/learifier-api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -46,6 +46,7 @@ export default function GlossaryApp() {
       const result = await translate(text);
       if (!result?.length) { setTranslation(t => ({ ...t, loading: false })); return; }
       setTranslation(t => ({ ...t, words: result, loading: false }));
+      prefetchWords(result);
       // Skip save if nothing was actually translated
       if (result.every(w => w.type === 'untranslated')) return;
       const elizabethan = result.map(w => w.display).join(' ');

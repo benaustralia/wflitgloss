@@ -78,6 +78,28 @@ async function fetchFromShakespeare(key) {
   }
 }
 
+// Prefetch shakespeareswords for all tappable words right after translation,
+// so wordCache is warm before the user taps anything.
+export function prefetchWords(words) {
+  const seen = new Set()
+  for (const w of words) {
+    if (w.type === 'untranslated') continue
+    const key = (w.forms?.[0] ?? w.core).toLowerCase()
+    if (!seen.has(key) && !wordCache.has(key)) {
+      seen.add(key)
+      fetchFromShakespeare(key).catch(() => {})
+    }
+    // Also warm the original-word fallback cache
+    if (w.original) {
+      const origKey = w.original.replace(/[^a-z']/gi, '').toLowerCase()
+      if (origKey && origKey !== key && !seen.has(origKey) && !wordCache.has(origKey)) {
+        seen.add(origKey)
+        fetchFromShakespeare(origKey).catch(() => {})
+      }
+    }
+  }
+}
+
 // shakespeareswords lookup — used by word-sheet after translation.
 // Returns { direct: [], related: [] }
 //   direct  = definitions for the exact Elizabethan word, filtered to contextual meaning
