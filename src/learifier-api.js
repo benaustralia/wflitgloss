@@ -53,13 +53,15 @@ export function warmWord(word) {
   if (word.original) { const ok = word.original.replace(/[^a-z']/gi,'').toLowerCase(); if (ok && ok !== key && !wordCache.has(ok)) fetchFromShakespeare(ok).catch(() => {}) }
 }
 
-export async function lookupShakespeare(word) {
-  const key = word.toLowerCase()
+export async function lookupShakespeare(word, modernWord = null) {
+  const key = word.toLowerCase(), modKey = modernWord ? modernWord.replace(/[^a-z']/gi,'').toLowerCase() : null
   const t0 = performance.now()
-  diag(`[shxp] lookup "${key}"`)
-  const { exact, related } = await fetchFromShakespeare(key)
-  diag(`[shxp] lookup "${key}" done → ${exact.length}d ${related.length}r (${Math.round(performance.now()-t0)}ms)`)
-  return { direct: exact, related }
+  diag(`[shxp] lookup "${key}"${modKey && modKey !== key ? ` + "${modKey}"` : ''}`)
+  const [primary, fallback] = await Promise.all([fetchFromShakespeare(key), modKey && modKey !== key ? fetchFromShakespeare(modKey) : Promise.resolve(null)])
+  const { exact, related } = primary
+  const relatedOut = exact.length === 0 && fallback ? [...related, ...fallback.exact] : related
+  diag(`[shxp] lookup "${key}" done → ${exact.length}d ${relatedOut.length}r (${Math.round(performance.now()-t0)}ms)`)
+  return { direct: exact, related: relatedOut }
 }
 
 export function annotate(w, o) {

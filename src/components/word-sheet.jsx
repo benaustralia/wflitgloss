@@ -31,7 +31,9 @@ export function WordSheet({ word, onClose }) {
     const _diag = msg => { console.log(msg); if (typeof window !== 'undefined') (window.__log = window.__log ?? []).push(msg) }
     _diag(`[sheet] tap "${word.core}" — lookup start`)
     const t0 = performance.now()
-    lookupShakespeare(word.forms?.[0] ?? word.core)
+    const core = word.forms?.[0] ?? word.core
+    const modern = word.modern ?? (word.original !== word.core ? word.original : null)
+    lookupShakespeare(core, modern)
       .then(results => {
         const ms = Math.round(performance.now() - t0)
         _diag(`[sheet] "${word.core}" — ${results.direct.length + results.related.length} entries in ${ms}ms`)
