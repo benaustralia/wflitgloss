@@ -73,10 +73,12 @@ export default function GlossaryApp() {
     setTrans(t => ({ ...t, loading: true, error: null, words: [] }))
     try {
       const result = await translate(text, words => setTrans(t => ({ ...t, loading: false, words })))
+      if (result?.length) {
+        const inputTokens  = Math.ceil(text.length / 4)
+        const outputTokens = Math.ceil(result.map(w => w.display).join(' ').length / 4)
+        incrementSpent(inputTokens, outputTokens).catch(() => {})
+      }
       if (!result?.length || result.every(w => w.type === 'untranslated')) { setTrans(t => ({ ...t, loading: false })); return }
-      const inputTokens  = Math.ceil(text.length / 4)
-      const outputTokens = Math.ceil(result.map(w => w.display).join(' ').length / 4)
-      incrementSpent(inputTokens, outputTokens).catch(() => {})
       const termData = { term: cap(result.map(w => w.display).join(' ')), definition: cap(text), words: result, ipa: '', tags: [] }
       glossaryService.addTerm(termData).then(id => setS(p => ({ ...p, terms: [{ id, ...termData }, ...p.terms] }))).catch(console.error)
     } catch (e) { setTrans(t => ({ ...t, error: e.message, loading: false })) }
