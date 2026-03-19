@@ -65,7 +65,7 @@ export async function lookupShakespeare(word, originalWord = null) {
     const relevant = exact.filter(h => h.Definition.toLowerCase().split(/[\s,;()'"\[\]]+/).some(dw => dw.length > 2 && terms.has(dw)))
     if (relevant.length > 0) exact = relevant
   }
-  if (exact.length === 0 && fallback) related = [...related, ...fallback.exact, ...fallback.related]
+  if (exact.length === 0 && fallback) related = [...related, ...fallback.exact]
   diag(`[shxp] lookup "${key}" done → ${exact.length}d ${related.length}r (${Math.round(performance.now()-t0)}ms)`)
   return { direct: exact, related }
 }
@@ -74,7 +74,7 @@ export function annotate(w, o) {
   const m = w.match(/^([^a-zA-Z]*)([a-zA-Z'][a-zA-Z'-]*)([^a-zA-Z]*)$/), core = m ? m[2] : w, pre = m ? m[1] : '', post = m ? m[3] : ''
   const key = core.toLowerCase(), oKey = o.replace(/[^a-z']/gi,'').toLowerCase(), entry = ESSENTIALS[key]
   const keyClean = key.replace(/[^a-z']/g,'')
-  return { display: w, original: o, core, pre, post, type: entry ? 'essential' : keyClean !== oKey ? 'translated' : 'untranslated', isMadness: MADNESS.has(key), ...(entry && { shxp: key, forms: entry.forms, ...(entry.vce_note != null && { vce_note: entry.vce_note }) }) }
+  return { display: w, original: o, core, pre, post, type: entry ? 'essential' : keyClean !== oKey ? 'translated' : 'untranslated', isMadness: MADNESS.has(key), ...(entry && { shxp: key, forms: entry.forms, ...(entry.modern != null && { modern: entry.modern }), ...(entry.vce_note != null && { vce_note: entry.vce_note }) }) }
 }
 
 export async function translate(text, onProgress) {
