@@ -17,7 +17,7 @@ export default function GlossaryApp() {
   const pendingAddRef = useRef(null)
   const update = u => setS(p => typeof u === 'function' ? u(p) : { ...p, ...u })
 
-  useEffect(() => { const cb = () => prewarmCommon(); (window.requestIdleCallback ?? (fn => setTimeout(fn, 2000)))(cb) }, [])
+  useEffect(() => { const go = () => { prewarmCommon(); document.removeEventListener('pointermove', go) }; document.addEventListener('pointermove', go, { once: true, passive: true }) }, [])
 
   useEffect(() => {
     const CACHE_KEY = 'shakelear-terms-cache'
