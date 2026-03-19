@@ -36,13 +36,12 @@ export default async (request) => {
           controller.enqueue(encoder.encode(event.delta.text))
         }
       }
-      controller.close()
 
-      // Fire-and-forget: increment spent cost and translation count in Firestore
+      // Increment credits BEFORE closing — function must still be alive for this to run
       try {
         const msg = await stream.finalMessage()
         const cost = msg.usage.input_tokens * (0.80 / 1_000_000) + msg.usage.output_tokens * (4.00 / 1_000_000)
-        fetch(`https://firestore.googleapis.com/v1/projects/wflitgloss/databases/(default)/documents:commit?key=${firebaseKey}`, {
+        await fetch(`https://firestore.googleapis.com/v1/projects/wflitgloss/databases/(default)/documents:commit?key=${firebaseKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ writes: [{ transform: {
@@ -52,8 +51,10 @@ export default async (request) => {
               { fieldPath: 'translations', increment: { integerValue: '1'  } },
             ],
           }}]}),
-        }).catch(() => {})
+        })
       } catch (_) {}
+
+      controller.close()
     },
   })
 
