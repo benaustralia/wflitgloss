@@ -67,12 +67,14 @@ export function WordSheet({ word, onClose }) {
 
             {!loading && hasEntries && (
               <div className="mb-6">
-                <a href="https://www.shakespeareswords.com" target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-3 mb-4 hover:opacity-80 transition-opacity">
-                  <img src="https://www.shakespeareswords.com/Images/ShakespearePortrait100px.png"
-                    alt="Shakespeare's Words" className="h-12 w-12 rounded-full" />
-                  <span className="text-xl font-semibold text-foreground">shakespeareswords.com</span>
-                </a>
+                {entries.direct.length > 0 && (
+                  <a href="https://www.shakespeareswords.com" target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 mb-4 hover:opacity-80 transition-opacity">
+                    <img src="https://www.shakespeareswords.com/Images/ShakespearePortrait100px.png"
+                      alt="Shakespeare's Words" className="h-12 w-12 rounded-full" />
+                    <span className="text-xl font-semibold text-foreground">shakespeareswords.com</span>
+                  </a>
+                )}
                 {entries.direct.length > 0 && (
                   <div className="space-y-2 mb-4">
                     {entries.direct.map(e => <EntryLink key={e.Id} entry={e} />)}
