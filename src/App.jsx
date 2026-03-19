@@ -99,8 +99,8 @@ export default function GlossaryApp() {
     <div className="w-full max-w-xl mx-auto min-h-screen bg-background flex flex-col">
       <Toaster />
       <div className="flex-none px-4 pt-8 pb-0 text-center">
-        <h1 className="text-5xl font-bold text-primary">Shake-o-Lingo</h1>
-        <h2 className="text-xl text-muted-foreground mt-2">Learn Shakespeare's English</h2>
+        <h1 className="text-[clamp(2rem,10vw,3rem)] font-bold text-primary">Shake-o-Lingo</h1>
+        <h2 className="text-[clamp(1rem,4vw,1.25rem)] text-muted-foreground mt-2">Learn Shakespeare's English</h2>
       </div>
       {s.loading && <div className="flex-1 flex items-center justify-center"><div className="text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" /><p className="text-muted-foreground">Loading glossary…</p></div></div>}
       {s.error   && <div className="flex-1 flex items-center justify-center p-4"><Alert variant="destructive" className="max-w-sm"><AlertDescription className="mb-4">{s.error}</AlertDescription><Button onClick={() => window.location.reload()}>Try Again</Button></Alert></div>}

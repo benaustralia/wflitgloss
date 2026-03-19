@@ -40,7 +40,7 @@ export function ListView({ s, h, trans, setTrans, showGoButton, handleTranslate,
             {sortedTerms.map(term => (
               <div key={term.id} id={`term-${term.id}`}
                 className={cn('p-4 flex flex-col gap-2 transition-all duration-700', (matchedTermId === term.id || s.flashId === term.id) && 'bg-violet-500/15')}>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden">
                   {term.words
                     ? <WordTokens words={term.words} onTap={word => setTrans(t => ({ ...t, activeWord: word }))} />
                     : <div className="font-medium text-base text-foreground break-words">{term.term || 'Untitled'}</div>}
