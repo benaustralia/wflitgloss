@@ -1,5 +1,6 @@
-// GET /api/terms — returns all glossary terms as plain JSON without requiring
-// the client to load the Firebase SDK. Server-side Firestore REST fetch.
+// Edge function: GET /api/terms
+// Runs at the CDN edge (no cold start). Fetches Firestore via REST and returns
+// all glossary terms as plain JSON — no Firebase SDK needed on the client.
 const PROJECT = 'wflitgloss'
 
 function convertValue(v) {
@@ -20,13 +21,12 @@ function convertFields(fields) {
   return obj
 }
 
-export default async (request) => {
+export default async (request, context) => {
   if (request.method !== 'GET') return new Response('', { status: 405 })
 
-  const apiKey = process.env.VITE_FIREBASE_API_KEY
+  const apiKey = Deno.env.get('VITE_FIREBASE_API_KEY')
   let allDocs = [], pageToken = null
 
-  // Paginate to handle >100 terms
   do {
     const url = new URL(`https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents/terms`)
     url.searchParams.set('key', apiKey)
@@ -34,7 +34,9 @@ export default async (request) => {
     if (pageToken) url.searchParams.set('pageToken', pageToken)
 
     const res = await fetch(url.toString())
-    if (!res.ok) return new Response(JSON.stringify({ error: 'Firestore error' }), { status: 502, headers: { 'Content-Type': 'application/json' } })
+    if (!res.ok) return new Response(JSON.stringify({ error: 'Firestore error' }), {
+      status: 502, headers: { 'Content-Type': 'application/json' },
+    })
 
     const data = await res.json()
     const docs = (data.documents ?? []).map(doc => ({
@@ -45,13 +47,14 @@ export default async (request) => {
     pageToken = data.nextPageToken ?? null
   } while (pageToken)
 
-  // Sort newest-first by createdAt (mirrors the Firestore client behaviour)
-  allDocs.sort((a, b) => (b.createdAt?._seconds ?? 0) - (a.createdAt?._seconds ?? 0) || b.id.localeCompare(a.id))
+  allDocs.sort((a, b) =>
+    (b.createdAt?._seconds ?? 0) - (a.createdAt?._seconds ?? 0) || b.id.localeCompare(a.id)
+  )
 
   return new Response(JSON.stringify(allDocs), {
     headers: {
       'Content-Type': 'application/json',
-      'Cache-Control': 'public, s-maxage=15, stale-while-revalidate=60',
+      'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=120',
     },
   })
 }
