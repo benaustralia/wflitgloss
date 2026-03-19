@@ -15,7 +15,7 @@ export function ListView({ s, h, trans, setTrans, showGoButton, handleTranslate,
         <Input placeholder="Type anything in modern English..." value={s.search}
           onChange={e => { h.updateSearch(e.target.value) }}
           onKeyDown={e => e.key === 'Enter' && showGoButton && handleTranslate()}
-          className="w-full h-10 text-sm" />
+          className="w-full h-10 text-base" />
         {showGoButton && (
           <Button size="icon" onClick={handleTranslate} aria-label="Translate"
             className="shrink-0 bg-transparent border border-violet-500 text-violet-500 hover:bg-violet-500/10 hover:border-violet-400 ring-2 ring-violet-500/30 animate-pulse">
