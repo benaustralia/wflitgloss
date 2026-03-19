@@ -89,7 +89,17 @@ export async function translate(text, onProgress) {
   if (!res.ok) throw new Error(`Translation API error: ${res.status}`)
   const reader = res.body.getReader(), decoder = new TextDecoder()
   let fullText = '', buffer = ''
-  const buildWords = t => { const tw = t.trim().split(/\s+/).filter(Boolean); if (!tw.length) return []; const pairs = origWords.length === tw.length ? origWords.map((o, i) => ({ o, w: tw[i] })) : tw.map(w => ({ o: w, w })); return pairs.map(({ w, o }) => annotate(w, o)) }
+  const origSet = new Set(origWords.map(w => w.replace(/[^a-z']/gi, '').toLowerCase()))
+  const buildWords = t => {
+    const tw = t.trim().split(/\s+/).filter(Boolean); if (!tw.length) return []
+    if (origWords.length === tw.length) return origWords.map((o, i) => annotate(tw[i], o))
+    return tw.map(w => {
+      const word = annotate(w, w)
+      const clean = word.core.toLowerCase()
+      if (word.type === 'untranslated' && !origSet.has(clean) && !STOPWORDS.has(clean)) return { ...word, type: 'translated' }
+      return word
+    })
+  }
   while (true) { const { done, value } = await reader.read(); if (done) break; const chunk = decoder.decode(value, { stream: true }); fullText += chunk; buffer += chunk; if (/\s/.test(buffer)) { onProgress?.(buildWords(fullText)); buffer = '' } }
   const result = buildWords(fullText); cache.set(trimmed, result); onProgress?.(result); return result
 }
