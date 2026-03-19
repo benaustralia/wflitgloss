@@ -27,7 +27,6 @@ export default async (request) => {
     ],
   })
 
-  const firebaseKey = process.env.VITE_FIREBASE_API_KEY
   const encoder = new TextEncoder()
   const readable = new ReadableStream({
     async start(controller) {
@@ -36,24 +35,6 @@ export default async (request) => {
           controller.enqueue(encoder.encode(event.delta.text))
         }
       }
-
-      // Increment credits BEFORE closing — function must still be alive for this to run
-      try {
-        const msg = await stream.finalMessage()
-        const cost = msg.usage.input_tokens * (0.80 / 1_000_000) + msg.usage.output_tokens * (4.00 / 1_000_000)
-        await fetch(`https://firestore.googleapis.com/v1/projects/wflitgloss/databases/(default)/documents:commit?key=${firebaseKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ writes: [{ transform: {
-            document: 'projects/wflitgloss/databases/(default)/documents/config/credits',
-            fieldTransforms: [
-              { fieldPath: 'spent',        increment: { doubleValue:  cost } },
-              { fieldPath: 'translations', increment: { integerValue: '1'  } },
-            ],
-          }}]}),
-        })
-      } catch (_) {}
-
       controller.close()
     },
   })
