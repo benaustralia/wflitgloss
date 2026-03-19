@@ -32,7 +32,8 @@ export function WordSheet({ word, onClose }) {
     _diag(`[sheet] tap "${word.core}" — lookup start`)
     const t0 = performance.now()
     const core = word.forms?.[0] ?? word.core
-    const origForLookup = word.vce_note ? null : (word.original?.replace(/[^a-z']/gi,'').toLowerCase() === core.toLowerCase() ? null : word.original)
+    const selfRef = word.original?.replace(/[^a-z']/gi,'').toLowerCase() === core.toLowerCase()
+    const origForLookup = word.vce_note ? null : selfRef ? (word.modern ?? null) : word.original
     lookupShakespeare(core, origForLookup)
       .then(results => {
         const ms = Math.round(performance.now() - t0)
