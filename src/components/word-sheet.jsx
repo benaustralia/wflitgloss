@@ -50,7 +50,7 @@ export function WordSheet({ word, onClose }) {
       <DrawerContent className="max-h-[70vh] max-w-xl mx-auto">
         <div className="overflow-y-auto px-6 pt-2 pb-10">
           {word && <>
-            <p className="text-xs font-mono uppercase tracking-[0.2em] text-violet-500 mb-2">Elizabethan Word</p>
+            <p className="text-xs font-mono uppercase tracking-[0.2em] text-violet-500 mb-2">Shakespearean Word</p>
             <h2 className="text-4xl font-bold mb-5 text-foreground">{word.forms?.[0] ?? word.core}</h2>
 
             {loading && (
