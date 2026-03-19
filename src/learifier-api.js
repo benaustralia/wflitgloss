@@ -70,7 +70,7 @@ export async function lookupShakespeare(word, originalWord = null) {
   return { direct: exact, related }
 }
 
-function annotate(w, o) {
+export function annotate(w, o) {
   const m = w.match(/^([^a-zA-Z]*)([a-zA-Z'][a-zA-Z'-]*)([^a-zA-Z]*)$/), core = m ? m[2] : w, pre = m ? m[1] : '', post = m ? m[3] : ''
   const key = core.toLowerCase(), oKey = o.replace(/[^a-z']/gi,'').toLowerCase(), entry = ESSENTIALS[key]
   const keyClean = key.replace(/[^a-z']/g,'')

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { translate, prewarmCommon } from '@/learifier-api'
+import { translate, prewarmCommon, annotate } from '@/learifier-api'
 import { incrementSpent } from '@/lib/credits'
 import { Toaster } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
@@ -22,17 +22,19 @@ export default function GlossaryApp() {
 
   useEffect(() => {
     const CACHE_KEY = 'shakelear-terms-cache'
+    const fixWords = terms => terms.map(t => t.words ? { ...t, words: t.words.map(w => annotate(w.display, w.original)) } : t)
     const cached = localStorage.getItem(CACHE_KEY)
     if (cached) {
       try {
-        const terms = JSON.parse(cached)
+        const terms = fixWords(JSON.parse(cached))
         update({ terms, tags: deriveTags(terms), loading: false })
       } catch {}
     }
     glossaryService.getAllTerms()
       .then(terms => {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(terms))
-        update({ terms, tags: deriveTags(terms), error: null, loading: false })
+        const fixed = fixWords(terms)
+        localStorage.setItem(CACHE_KEY, JSON.stringify(fixed))
+        update({ terms: fixed, tags: deriveTags(fixed), error: null, loading: false })
       })
       .catch(err => update(p => p.terms.length ? { ...p, loading: false } : { ...p, error: err.message || 'Failed to load.', loading: false }))
   }, [])
