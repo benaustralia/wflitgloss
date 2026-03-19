@@ -31,10 +31,7 @@ export function WordSheet({ word, onClose }) {
     const _diag = msg => { console.log(msg); if (typeof window !== 'undefined') (window.__log = window.__log ?? []).push(msg) }
     _diag(`[sheet] tap "${word.core}" — lookup start`)
     const t0 = performance.now()
-    const core = word.forms?.[0] ?? word.core
-    const selfRef = word.original?.replace(/[^a-z']/gi,'').toLowerCase() === core.toLowerCase()
-    const origForLookup = word.vce_note ? null : selfRef ? (word.modern ?? null) : word.original
-    lookupShakespeare(core, origForLookup)
+    lookupShakespeare(word.forms?.[0] ?? word.core)
       .then(results => {
         const ms = Math.round(performance.now() - t0)
         _diag(`[sheet] "${word.core}" — ${results.direct.length + results.related.length} entries in ${ms}ms`)

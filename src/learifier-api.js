@@ -53,19 +53,11 @@ export function warmWord(word) {
   if (word.original) { const ok = word.original.replace(/[^a-z']/gi,'').toLowerCase(); if (ok && ok !== key && !wordCache.has(ok)) fetchFromShakespeare(ok).catch(() => {}) }
 }
 
-export async function lookupShakespeare(word, originalWord = null) {
-  const key = word.toLowerCase(), origKey = originalWord ? originalWord.replace(/[^a-z']/gi,'').toLowerCase() : null
+export async function lookupShakespeare(word) {
+  const key = word.toLowerCase()
   const t0 = performance.now()
-  diag(`[shxp] lookup "${key}"${origKey && origKey !== key ? ` + "${origKey}"` : ''}`)
-  const [primary, fallback] = await Promise.all([fetchFromShakespeare(key), origKey && origKey !== key ? fetchFromShakespeare(origKey) : Promise.resolve(null)])
-  let { exact, related } = primary
-  if (originalWord && exact.length > 1) {
-    const cleanOrig = originalWord.replace(/[^a-z']/gi,''), synonyms = await getSynonyms(cleanOrig)
-    const terms = new Set([cleanOrig.toLowerCase(), ...synonyms])
-    const relevant = exact.filter(h => h.Definition.toLowerCase().split(/[\s,;()'"\[\]]+/).some(dw => dw.length > 2 && terms.has(dw)))
-    if (relevant.length > 0) exact = relevant
-  }
-  if (exact.length === 0 && fallback) related = [...related, ...fallback.exact]
+  diag(`[shxp] lookup "${key}"`)
+  const { exact, related } = await fetchFromShakespeare(key)
   diag(`[shxp] lookup "${key}" done → ${exact.length}d ${related.length}r (${Math.round(performance.now()-t0)}ms)`)
   return { direct: exact, related }
 }
