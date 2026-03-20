@@ -12,7 +12,7 @@ export function ListView({ s, h, trans, setTrans, showGoButton, handleTranslate,
   return (
     <div className="flex flex-col flex-1 w-full">
       <div className="flex gap-2 items-center px-4 pt-4 pb-2">
-        <Input placeholder="Type anything in modern English..." value={s.search}
+        <Input placeholder="Type a modern English sentence to Shakespeareanise..." value={s.search}
           onChange={e => { h.updateSearch(e.target.value) }}
           onKeyDown={e => e.key === 'Enter' && showGoButton && handleTranslate()}
           className="w-full h-10 text-base" />
@@ -30,7 +30,10 @@ export function ListView({ s, h, trans, setTrans, showGoButton, handleTranslate,
         <div className="px-4 pb-4 border-b border-border">
           {trans.loading && <p className="text-muted-foreground text-sm italic animate-pulse py-4">Translating…</p>}
           {trans.error && <Alert variant="destructive" className="mt-2"><AlertDescription>{trans.error}</AlertDescription></Alert>}
-          {trans.words.length > 0 && <TranslationPanel words={trans.words} loading={false} onTap={word => setTrans(t => ({ ...t, activeWord: word }))} />}
+          {trans.words.length > 0 && <>
+            <TranslationPanel words={trans.words} loading={false} onTap={word => setTrans(t => ({ ...t, activeWord: word }))} />
+            <p className="text-xs text-muted-foreground italic px-4 pb-2">Translations are a guide, not a rule — Shakespeare had more than one way to say most things.</p>
+          </>}
         </div>
       )}
 
