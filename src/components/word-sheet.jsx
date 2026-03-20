@@ -52,7 +52,7 @@ export function WordSheet({ word, onClose }) {
         setEntries(results)
         setLoading(false)
         // Only ask Claude when shakespeareswords.com has no coverage at all
-        if (results.direct.length === 0 && results.related.length === 0) {
+        if (results.direct.length === 0) {
           setDefLoading(true)
           fetch('/api/define', {
             method: 'POST',
@@ -67,7 +67,7 @@ export function WordSheet({ word, onClose }) {
       .catch(() => setLoading(false))
   }, [word])
 
-  const hasEntries = entries.direct.length > 0 || entries.related.length > 0
+  const hasEntries = entries.direct.length > 0
 
   return (
     <Drawer open={!!word} onOpenChange={open => !open && onClose()}>
