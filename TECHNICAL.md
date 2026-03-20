@@ -1,0 +1,86 @@
+# Shake-o-Lingo — Technical Integration Notes
+
+A reference for developers interested in how this project integrates with [shakespeareswords.com](https://www.shakespeareswords.com).
+
+---
+
+## The shakespeareswords.com Integration
+
+Shake-o-Lingo uses the autocomplete endpoint that powers the search bar on shakespeareswords.com:
+
+```
+POST https://www.shakespeareswords.com/ajax/AjaxResponder.aspx
+Content-Type: application/json
+
+{ "commandName": "cmd_autocomplete", "parameters": "<word>" }
+```
+
+This returns a brief `Headword` and `Definition` string for each matching entry — the same short phrases visible in the free search bar. Full glossary entries, citations, and subscription content are never accessed.
+
+### What is NOT accessed
+- Individual glossary pages (`/Public/Glossary.aspx?Id=...`) are not fetched programmatically
+- No subscription credentials are used
+- No content beyond the autocomplete payload is retrieved or stored
+
+### Traffic & subscription impact
+Each lookup is a background JSON request. It does not load a glossary page, does not increment a user's free page-view count, and does not register in standard web analytics as a site visit.
+
+---
+
+## Caching Architecture
+
+Three layers ensure shakespeareswords.com is contacted as infrequently as possible.
+
+### 1. In-session memory cache
+Results are held in a JavaScript `Map` for the duration of a browser session. The same word looked up twice in one sitting makes only one network request.
+
+### 2. Browser HTTP cache (7 days)
+The Netlify function proxying the request returns:
+```
+Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+```
+A word looked up on Monday will not produce another outbound request until the following Monday, for that user.
+
+### 3. Universal server-side cache (Netlify Blobs)
+
+Three permanent, server-side blob stores shared across all users:
+
+| Store | Key | Value | Purpose |
+|---|---|---|---|
+| `shakespeare-empty` | word | `1` | Words confirmed absent from shakespeareswords.com — short-circuits future lookups before they reach the upstream server |
+| `shakespeare-define` | word | JSON `{ gloss }` | Claude-generated gloss for words not covered by shakespeareswords.com — sourced independently, never derived from their content |
+| `shakespeare-rank` | word\|\|sentence | integer index | Best-matching entry index when multiple definitions exist for a word in context — only an integer is stored, no entry content |
+
+The first user to look up any given word pays the cost of the upstream request; all subsequent lookups worldwide are served from the blob store.
+
+---
+
+## What is stored permanently
+
+| Data | Stored? | Where |
+|---|---|---|
+| shakespeareswords.com definitions | No | — |
+| shakespeareswords.com headwords | No | — |
+| Words with no glossary entry | Yes | `shakespeare-empty` (absence flag only) |
+| Claude-generated glosses | Yes | `shakespeare-define` (independent, not derived from their content) |
+| Best-match entry index | Yes | `shakespeare-rank` (integer only) |
+| Per-user browser cache | Yes | User's own browser only |
+
+---
+
+## Claude AI Integration
+
+[Claude](https://claude.ai) (Anthropic) is used for two purposes:
+
+1. **Translation** — converting modern English input into Early Modern English (Shakespearean) output, word-for-word.
+2. **Glossing** — providing a brief definition for Shakespearean words not covered by shakespeareswords.com. Claude works entirely from its own training; shakespeareswords.com content is never passed to Claude as input.
+
+Claude's glosses and shakespeareswords.com entries are kept as entirely separate sources and are always displayed with clear attribution.
+
+---
+
+## Source Code
+
+This project is open source: [github.com/benaustralia/wflitgloss](https://github.com/benaustralia/wflitgloss)
+
+The shakespeareswords.com integration can be verified independently — no proprietary access required. Any developer can reproduce the autocomplete request by opening browser DevTools on shakespeareswords.com, typing a word into the search bar, and observing the POST request to `AjaxResponder.aspx`.
