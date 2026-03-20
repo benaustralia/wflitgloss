@@ -41,11 +41,10 @@ export function WordSheet({ word, onClose }) {
 
     const core = word.forms?.[0] ?? word.core
 
-    // Derive lookup fallback: explicit modern > -eth/-est stem > original
+    // Derive lookup fallback: explicit modern > -eth/-est stem only
     let modern = word.modern ?? null
     if (!modern && /eth$/i.test(core)) modern = core.replace(/eth$/i, '')
     else if (!modern && /est$/i.test(core)) modern = core.replace(/est$/i, '')
-    if (!modern && word.original !== word.core) modern = word.original
 
     lookupShakespeare(core, modern)
       .then(results => {
