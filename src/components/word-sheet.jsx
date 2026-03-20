@@ -10,12 +10,15 @@ function decodeHtml(str) {
   return txt.value
 }
 
-function EntryLink({ entry }) {
+function EntryLink({ entry, highlighted }) {
   return (
     <a
       href={`https://www.shakespeareswords.com/Public/Glossary.aspx?Id=${entry.Id}`}
       target="_blank" rel="noopener noreferrer"
-      className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border hover:bg-accent transition-colors no-underline group"
+      className={cn(
+        'flex items-start justify-between gap-3 p-3 rounded-lg border hover:bg-accent transition-colors no-underline group',
+        highlighted ? 'border-violet-500 bg-violet-500/5' : 'border-border',
+      )}
     >
       <div>
         <span className="text-sm font-medium text-foreground">{entry.Headword}</span>
@@ -31,12 +34,14 @@ export function WordSheet({ word, onClose }) {
   const [loading, setLoading] = useState(false)
   const [claudeDef, setClaudeDef] = useState(null)
   const [defLoading, setDefLoading] = useState(false)
+  const [bestMatch, setBestMatch] = useState(null)
 
   useEffect(() => {
     if (!word) return
     setEntries({ direct: [], related: [] })
     setClaudeDef(null)
     setDefLoading(false)
+    setBestMatch(null)
     setLoading(true)
 
     const core = word.forms?.[0] ?? word.core
@@ -50,7 +55,19 @@ export function WordSheet({ word, onClose }) {
       .then(results => {
         setEntries(results)
         setLoading(false)
-        // Only ask Claude when shakespeareswords.com has no coverage at all
+        // Rank multiple direct entries by sentence context
+        if (results.direct.length > 1 && word._sentence) {
+          fetch('/api/rank', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word: core, sentence: word._sentence, entries: results.direct }),
+          })
+            .then(r => r.ok ? r.json() : { bestMatch: 0 })
+            .then(({ bestMatch }) => setBestMatch(bestMatch))
+            .catch(() => {})
+        }
+
+        // Ask Claude when shakespeareswords.com has no direct coverage
         if (results.direct.length === 0) {
           setDefLoading(true)
           fetch('/api/define', {
@@ -128,7 +145,7 @@ export function WordSheet({ word, onClose }) {
                   <span className="text-xl font-semibold text-foreground">shakespeareswords.com</span>
                 </a>
                 <div className="space-y-2 mb-4">
-                  {entries.direct.map(e => <EntryLink key={e.Id} entry={e} />)}
+                  {entries.direct.map((e, i) => <EntryLink key={e.Id} entry={e} highlighted={bestMatch === i} />)}
                 </div>
                 {entries.related.length > 0 && (
                   <div>
