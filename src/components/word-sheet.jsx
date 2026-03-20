@@ -105,6 +105,12 @@ export function WordSheet({ word, onClose }) {
                 </div>
                 {entries.related.length > 0 && (
                   <div>
+                    <a href="https://www.shakespeareswords.com" target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-3 mb-3 hover:opacity-80 transition-opacity">
+                      <img src="https://www.shakespeareswords.com/Images/ShakespearePortrait100px.png"
+                        alt="Shakespeare's Words" className="h-12 w-12 rounded-full" />
+                      <span className="text-xl font-semibold text-foreground">shakespeareswords.com</span>
+                    </a>
                     <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">Related Word(s)</p>
                     <div className="space-y-2">
                       {entries.related.map(e => <EntryLink key={e.Id} entry={e} />)}
