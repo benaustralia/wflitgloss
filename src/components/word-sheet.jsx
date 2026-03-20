@@ -10,15 +10,12 @@ function decodeHtml(str) {
   return txt.value
 }
 
-function EntryLink({ entry, highlighted }) {
+function EntryLink({ entry }) {
   return (
     <a
       href={`https://www.shakespeareswords.com/Public/Glossary.aspx?Id=${entry.Id}`}
       target="_blank" rel="noopener noreferrer"
-      className={cn(
-        'flex items-start justify-between gap-3 p-3 rounded-lg border hover:bg-accent transition-colors no-underline group',
-        highlighted ? 'border-violet-500 bg-violet-500/5' : 'border-border',
-      )}
+      className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border hover:bg-accent transition-colors no-underline group"
     >
       <div>
         <span className="text-sm font-medium text-foreground">{entry.Headword}</span>
@@ -84,6 +81,12 @@ export function WordSheet({ word, onClose }) {
   }, [word])
 
   const hasEntries = entries.direct.length > 0
+  const displayDirect = bestMatch !== null && entries.direct.length > 1
+    ? [entries.direct[bestMatch]]
+    : entries.direct
+  const displayRelated = bestMatch !== null && entries.direct.length > 1
+    ? [...entries.direct.filter((_, i) => i !== bestMatch), ...entries.related]
+    : entries.related
 
   return (
     <Drawer open={!!word} onOpenChange={open => !open && onClose()}>
@@ -145,13 +148,13 @@ export function WordSheet({ word, onClose }) {
                   <span className="text-xl font-semibold text-foreground">shakespeareswords.com</span>
                 </a>
                 <div className="space-y-2 mb-4">
-                  {entries.direct.map((e, i) => <EntryLink key={e.Id} entry={e} highlighted={bestMatch === i} />)}
+                  {displayDirect.map(e => <EntryLink key={e.Id} entry={e} />)}
                 </div>
-                {entries.related.length > 0 && (
+                {displayRelated.length > 0 && (
                   <div>
                     <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">Related Word(s)</p>
                     <div className="space-y-2">
-                      {entries.related.map(e => <EntryLink key={e.Id} entry={e} />)}
+                      {displayRelated.map(e => <EntryLink key={e.Id} entry={e} />)}
                     </div>
                   </div>
                 )}
