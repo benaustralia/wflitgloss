@@ -4,6 +4,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ExternalLink } from 'lucide-react'
 import { lookupShakespeare } from '@/learifier-api'
 
+function decodeHtml(str) {
+  const txt = document.createElement('textarea')
+  txt.innerHTML = str
+  return txt.value
+}
+
 function EntryLink({ entry }) {
   return (
     <a
@@ -13,7 +19,7 @@ function EntryLink({ entry }) {
     >
       <div>
         <span className="text-sm font-medium text-foreground">{entry.Headword}</span>
-        <span className="text-sm text-muted-foreground ml-2">{entry.Definition}</span>
+        <span className="text-sm text-muted-foreground ml-2">{decodeHtml(entry.Definition)}</span>
       </div>
       <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 mt-0.5 transition-colors" />
     </a>
@@ -23,24 +29,38 @@ function EntryLink({ entry }) {
 export function WordSheet({ word, onClose }) {
   const [entries, setEntries] = useState({ direct: [], related: [] })
   const [loading, setLoading] = useState(false)
+  const [claudeDef, setClaudeDef] = useState(null)
 
   useEffect(() => {
     if (!word) return
     setEntries({ direct: [], related: [] })
+    setClaudeDef(null)
     setLoading(true)
-    const _diag = msg => { console.log(msg); if (typeof window !== 'undefined') (window.__log = window.__log ?? []).push(msg) }
-    _diag(`[sheet] tap "${word.core}" — lookup start`)
-    const t0 = performance.now()
+
     const core = word.forms?.[0] ?? word.core
-    const modern = word.modern ?? (word.original !== word.core ? word.original : null)
+
+    // Derive lookup fallback: explicit modern > original (if different) > -eth/-est stem
+    let modern = word.modern ?? (word.original !== word.core ? word.original : null)
+    if (!modern && /eth$/i.test(core)) modern = core.replace(/eth$/i, '')
+    else if (!modern && /est$/i.test(core)) modern = core.replace(/est$/i, '')
+
     lookupShakespeare(core, modern)
       .then(results => {
-        const ms = Math.round(performance.now() - t0)
-        _diag(`[sheet] "${word.core}" — ${results.direct.length + results.related.length} entries in ${ms}ms`)
         setEntries(results)
         setLoading(false)
+        // Only ask Claude when shakespeareswords.com has no coverage at all
+        if (results.direct.length === 0 && results.related.length === 0) {
+          fetch('/api/define', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ word: core, original: word.original !== word.core ? word.original : null }),
+          })
+            .then(r => r.ok ? r.json() : null)
+            .then(def => setClaudeDef(def))
+            .catch(() => {})
+        }
       })
-      .catch(err => { _diag(`[sheet] "${word.core}" ERROR: ${err.message}`); setLoading(false) })
+      .catch(() => setLoading(false))
   }, [word])
 
   const hasEntries = entries.direct.length > 0 || entries.related.length > 0
@@ -61,8 +81,18 @@ export function WordSheet({ word, onClose }) {
               </div>
             )}
 
-            {!loading && !hasEntries && (
-              <p className="text-sm text-muted-foreground italic">No Elizabethan entries found for this word.</p>
+            {!loading && !hasEntries && !claudeDef && (
+              <p className="text-sm text-muted-foreground italic">No Shakespearean entries found for this word.</p>
+            )}
+
+            {!loading && !hasEntries && claudeDef && (
+              <div className="mb-6">
+                <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">Claude says</p>
+                <div className="p-3 rounded-lg border border-border">
+                  <span className="text-sm font-medium text-foreground">{claudeDef.gloss}</span>
+                  {claudeDef.note && <p className="text-xs text-muted-foreground mt-1">{claudeDef.note}</p>}
+                </div>
+              </div>
             )}
 
             {!loading && hasEntries && (
