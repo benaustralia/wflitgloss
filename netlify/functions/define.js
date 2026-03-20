@@ -8,7 +8,7 @@ import Anthropic from '@anthropic-ai/sdk'
 const SYSTEM = `You are a concise Early Modern English glossary assistant. Given a Shakespearean word or inflected form, respond with a single raw JSON object — no markdown, no code fences — in this exact shape: {"gloss":"<brief modern English meaning, 2–6 words>"}. Give only the word's primary Shakespearean meaning — not modern alternative meanings, not parts of speech, not grammar notes. For example: "moor" → {"gloss":"open uncultivated wasteland"}, "thee" → {"gloss":"you (singular)"}, "desireth" → {"gloss":"desires, wishes for"}. Never explain, never elaborate beyond the gloss field.`
 
 export default async (request) => {
-  const { word, original } = await request.json()
+  const { word, original, sentence } = await request.json()
   const key = word?.trim().toLowerCase()
   if (!key) return new Response(JSON.stringify(null), { status: 400, headers: { 'Content-Type': 'application/json' } })
 
@@ -28,9 +28,11 @@ export default async (request) => {
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY || process.env.VITE_ANTHROPIC_API_KEY
     const client = new Anthropic({ apiKey })
-    const userContent = original && original !== key
-      ? `word: "${key}", modern equivalent: "${original}"`
-      : `word: "${key}"`
+    const userContent = [
+      `word: "${key}"`,
+      original && original !== key ? `modern equivalent: "${original}"` : null,
+      sentence ? `sentence context: "${sentence}"` : null,
+    ].filter(Boolean).join(', ')
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 80,

@@ -38,9 +38,10 @@ export function TranslationKey() {
 
 export function WordTokens({ words, onTap }) {
   if (!words?.length) return null
+  const sentence = words.map(w => w.display).join(' ')
   return (
     <p className="text-base leading-[2] flex flex-wrap">
-      {words.map((word, i) => <WordToken key={i} word={word} onTap={onTap} />)}
+      {words.map((word, i) => <WordToken key={i} word={word} onTap={w => onTap({ ...w, _sentence: sentence })} />)}
     </p>
   )
 }
@@ -70,7 +71,7 @@ export function TranslationPanel({ words, loading, onTap }) {
   return (
     <div ref={containerRef} className="px-4 pt-4 pb-6">
       <p className="text-lg leading-[2.2] flex flex-wrap">
-        {words.map((word, i) => <WordToken key={i} word={word} onTap={onTap} />)}
+        {words.map((word, i) => <WordToken key={i} word={word} onTap={w => onTap({ ...w, _sentence: words.map(w => w.display).join(' ') })} />)}
       </p>
     </div>
   )

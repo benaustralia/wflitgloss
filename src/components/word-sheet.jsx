@@ -56,7 +56,7 @@ export function WordSheet({ word, onClose }) {
           fetch('/api/define', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ word: core, original: word.original !== word.core ? word.original : null }),
+            body: JSON.stringify({ word: core, original: word.original !== word.core ? word.original : null, sentence: word._sentence ?? null }),
           })
             .then(r => r.ok ? r.json() : null)
             .then(def => { setClaudeDef(def); setDefLoading(false) })
