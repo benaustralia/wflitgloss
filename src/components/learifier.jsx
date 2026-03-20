@@ -5,6 +5,10 @@ import { warmWord } from '@/learifier-api'
 import { cn } from '@/lib/utils'
 
 function WordToken({ word, onTap }) {
+  if (word.type === 'anachronistic') return (
+    <span className="word-token inline-block mr-[0.3em] my-1 line-through text-muted-foreground/40 cursor-default"
+      title="No Shakespearean equivalent">{word.display}</span>
+  )
   const tappable = word.type === 'essential' || word.type === 'translated'
   const cls = cn(
     'word-token inline-block mr-[0.3em] my-1',
