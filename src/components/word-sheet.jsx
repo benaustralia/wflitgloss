@@ -30,11 +30,13 @@ export function WordSheet({ word, onClose }) {
   const [entries, setEntries] = useState({ direct: [], related: [] })
   const [loading, setLoading] = useState(false)
   const [claudeDef, setClaudeDef] = useState(null)
+  const [defLoading, setDefLoading] = useState(false)
 
   useEffect(() => {
     if (!word) return
     setEntries({ direct: [], related: [] })
     setClaudeDef(null)
+    setDefLoading(false)
     setLoading(true)
 
     const core = word.forms?.[0] ?? word.core
@@ -50,14 +52,15 @@ export function WordSheet({ word, onClose }) {
         setLoading(false)
         // Only ask Claude when shakespeareswords.com has no coverage at all
         if (results.direct.length === 0 && results.related.length === 0) {
+          setDefLoading(true)
           fetch('/api/define', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ word: core, original: word.original !== word.core ? word.original : null }),
           })
             .then(r => r.ok ? r.json() : null)
-            .then(def => setClaudeDef(def))
-            .catch(() => {})
+            .then(def => { setClaudeDef(def); setDefLoading(false) })
+            .catch(() => setDefLoading(false))
         }
       })
       .catch(() => setLoading(false))
@@ -81,7 +84,14 @@ export function WordSheet({ word, onClose }) {
               </div>
             )}
 
-            {!loading && !hasEntries && !claudeDef && (
+            {!loading && !hasEntries && defLoading && (
+              <div className="space-y-3 mb-6">
+                <Skeleton className="h-4 w-24 rounded" />
+                <Skeleton className="h-10 w-full rounded-lg" />
+              </div>
+            )}
+
+            {!loading && !hasEntries && !defLoading && !claudeDef && (
               <p className="text-sm text-muted-foreground italic">No Shakespearean entries found for this word.</p>
             )}
 
