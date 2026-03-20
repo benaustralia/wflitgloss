@@ -98,9 +98,9 @@ export function WordSheet({ word, onClose }) {
             {!loading && !hasEntries && claudeDef && (
               <div className="mb-6">
                 <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-3">Claude says</p>
-                <div className="p-3 rounded-lg border border-border mb-4">
-                  <span className="text-sm font-medium text-foreground">{claudeDef.gloss}</span>
-                  {claudeDef.note && <p className="text-xs text-muted-foreground mt-1">{claudeDef.note}</p>}
+                <div className="flex items-start p-3 rounded-lg border border-border mb-4">
+                  <span className="text-sm font-medium text-foreground">{word.forms?.[0] ?? word.core}</span>
+                  <span className="text-sm text-muted-foreground ml-2">{claudeDef.gloss}</span>
                 </div>
                 {entries.related.length > 0 && (
                   <div>

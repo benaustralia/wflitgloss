@@ -5,7 +5,7 @@
 import { getStore } from '@netlify/blobs'
 import Anthropic from '@anthropic-ai/sdk'
 
-const SYSTEM = `You are a concise Early Modern English glossary assistant. Given a Shakespearean word or inflected form, respond with a single raw JSON object — no markdown, no code fences — in this exact shape: {"gloss":"<brief modern English meaning, 2–6 words>","note":"<optional: grammatical note, e.g. third-person singular of desire>"}. Include "note" only when the word is an inflected or contracted form. Never explain, never elaborate beyond these two fields.`
+const SYSTEM = `You are a concise Early Modern English glossary assistant. Given a Shakespearean word or inflected form, respond with a single raw JSON object — no markdown, no code fences — in this exact shape: {"gloss":"<brief modern English meaning, 2–6 words>"}. Give only the word's primary Shakespearean meaning — not modern alternative meanings, not parts of speech, not grammar notes. For example: "moor" → {"gloss":"open uncultivated wasteland"}, "thee" → {"gloss":"you (singular)"}, "desireth" → {"gloss":"desires, wishes for"}. Never explain, never elaborate beyond the gloss field.`
 
 export default async (request) => {
   const { word, original } = await request.json()
